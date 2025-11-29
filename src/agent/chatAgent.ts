@@ -1,13 +1,33 @@
 import { ai, type AxChatResponse, type AxFunction } from "@ax-llm/ax";
 import { inventoryTools } from "./tools/definitions";
 
+// Multimodal content types for chat messages
+type TextContent = { type: "text"; text: string };
+type ImageContent = {
+  type: "image";
+  image: string; // base64 data or data URL
+  mimeType: string;
+  details?: "high" | "low" | "auto";
+};
+type MessageContent = string | (TextContent | ImageContent)[];
+
+interface ChatMessage {
+  role: "system" | "user" | "assistant";
+  content: MessageContent;
+}
+
 // Lazy-load OpenRouter client to avoid build-time initialization
 let _llm: ReturnType<typeof ai> | null = null;
 function getLlm() {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    throw new Error("OPENROUTER_API_KEY environment variable is not set");
+  }
+
   if (!_llm) {
     _llm = ai({
       name: "openrouter",
-      apiKey: process.env.OPENROUTER_API_KEY!,
+      apiKey,
       config: {
         model: "x-ai/grok-4-fast",
       },
@@ -19,7 +39,7 @@ function getLlm() {
 }
 
 // System instructions (set via setInstruction to avoid signature parsing issues)
-const SYSTEM_PROMPT = `You are Mise, a helpful kitchen assistant. Your role is to:
+const SYSTEM_PROMPT = `You are Mise, a helpful kitchen assistant with vision capabilities. Your role is to:
 - Help users manage their kitchen inventory using the available tools
 - Suggest recipes based on available ingredients
 - Provide cooking tips and techniques
@@ -64,6 +84,7 @@ ALWAYS search or check inventory BEFORE any add/update/deduct action to avoid du
 TOOL WORKFLOWS:
 - Adding groceries: searchInventory (check existing) then addInventory (only new items) or updateInventory (increase existing)
 - Using ingredients: searchInventory (verify exists) then deductInventory
+- Image with groceries: Analyze the image directly, list what you see, then searchInventory (check each) then addInventory (confirmed new items only)
 - Recipe suggestions: getExpiringItems + searchInventory then generateRecipe
 - Leftovers: addLeftover (these are unique dishes, no duplicate check needed)
 
@@ -103,6 +124,37 @@ export interface ToolEvent {
 export interface ChatAgentResult {
   response: string;
   toolEvents: ToolEvent[];
+}
+
+/**
+ * Build a multimodal user message with text and optional image
+ */
+function buildUserMessage(
+  text: string,
+  imageBase64?: string,
+  imageMimeType?: string
+): MessageContent {
+  if (!imageBase64) {
+    return text || "What's in this image?";
+  }
+
+  // Build data URL if not already one
+  const imageData = imageBase64.startsWith("data:")
+    ? imageBase64
+    : `data:${imageMimeType || "image/jpeg"};base64,${imageBase64}`;
+
+  // Build multimodal content array with text and image
+  const content: (TextContent | ImageContent)[] = [
+    { type: "text", text: text || "What's in this image?" },
+    {
+      type: "image",
+      image: imageData,
+      mimeType: imageMimeType || "image/jpeg",
+      details: "high", // Use high detail for better food/receipt analysis
+    },
+  ];
+
+  return content;
 }
 
 /**
@@ -152,9 +204,8 @@ export async function runChatAgent(input: ChatAgentInput): Promise<ChatAgentResu
     },
   }));
 
-  // Build chat messages for direct llm.chat() call
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const chatPrompt: any[] = [
+  // Build chat messages for direct llm.chat() call with multimodal support
+  const chatPrompt: ChatMessage[] = [
     { role: "system", content: SYSTEM_PROMPT },
   ];
 
@@ -165,31 +216,19 @@ export async function runChatAgent(input: ChatAgentInput): Promise<ChatAgentResu
     }
   }
 
-  // Add current user message - with image if present (multimodal)
-  const userMessage = input.message || "What's in this image?";
-
-  if (input.imageBase64) {
-    // Build multimodal content with image
-    const imageData = input.imageBase64.startsWith("data:")
-      ? input.imageBase64
-      : `data:${input.imageMimeType || "image/jpeg"};base64,${input.imageBase64}`;
-
-    chatPrompt.push({
-      role: "user",
-      content: [
-        { type: "text", text: userMessage },
-        { type: "image", image: imageData, mimeType: input.imageMimeType || "image/jpeg" },
-      ],
-    });
-  } else {
-    chatPrompt.push({ role: "user", content: userMessage });
-  }
+  // Add current user message with multimodal content if image present
+  const userContent = buildUserMessage(
+    input.message,
+    input.imageBase64,
+    input.imageMimeType
+  );
+  chatPrompt.push({ role: "user", content: userContent });
 
   // Use direct llm.chat() - bypasses signature parsing
   const llm = getLlm();
   const response = await llm.chat(
     {
-      chatPrompt,
+      chatPrompt: chatPrompt as any, // Cast needed for multimodal content arrays
       functions: wrappedTools,
       functionCall: "auto",
     },
@@ -207,7 +246,7 @@ export async function runChatAgent(input: ChatAgentInput): Promise<ChatAgentResu
 
 /**
  * Stream the chat agent response with real-time tool events.
- * Yields events as they happen for SSE streaming.
+ * Uses native multimodal vision - sends images directly to the LLM.
  */
 export async function* streamChatAgent(
   input: ChatAgentInput
@@ -222,7 +261,10 @@ export async function* streamChatAgent(
   let toolCounter = 0;
   let tokenIndex = 0;
 
-  yield { type: "thinking", status: input.imageBase64 ? "Looking at your image..." : "Thinking..." };
+  yield {
+    type: "thinking",
+    status: input.imageBase64 ? "Looking at your image..." : "Thinking...",
+  };
 
   // Store tool events for yielding
   const pendingEvents: Array<
@@ -267,9 +309,8 @@ export async function* streamChatAgent(
   }));
 
   try {
-    // Build chat messages for direct llm.chat() call
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const chatPrompt: any[] = [
+    // Build chat messages with native multimodal support
+    const chatPrompt: ChatMessage[] = [
       { role: "system", content: SYSTEM_PROMPT },
     ];
 
@@ -280,34 +321,20 @@ export async function* streamChatAgent(
       }
     }
 
-    // Add current user message - with image if present (multimodal)
-    const userMessage = input.message || "What's in this image?";
+    // Add current user message with multimodal content if image present
+    const userContent = buildUserMessage(
+      input.message,
+      input.imageBase64,
+      input.imageMimeType
+    );
+    chatPrompt.push({ role: "user", content: userContent });
 
-    if (input.imageBase64) {
-      // Build multimodal content with image
-      const imageData = input.imageBase64.startsWith("data:")
-        ? input.imageBase64
-        : `data:${input.imageMimeType || "image/jpeg"};base64,${input.imageBase64}`;
-
-      chatPrompt.push({
-        role: "user",
-        content: [
-          { type: "text", text: userMessage },
-          { type: "image", image: imageData, mimeType: input.imageMimeType || "image/jpeg" },
-        ],
-      });
-    } else {
-      chatPrompt.push({ role: "user", content: userMessage });
-    }
-
-    // Use direct llm.chat() - bypasses signature parsing
+    // Use direct llm.chat() with multimodal support
     const llm = getLlm();
 
-    // Use non-streaming mode for simpler response handling
-    // Then stream character by character to the client
     const response = await llm.chat(
       {
-        chatPrompt,
+        chatPrompt: chatPrompt as any, // Cast needed for multimodal content arrays
         functions: wrappedTools,
         functionCall: "auto",
       },
@@ -337,14 +364,19 @@ export async function* streamChatAgent(
 
     yield { type: "complete", success: true };
   } catch (error) {
+    console.error("Chat agent error:", error);
+
     // Yield any pending events
     while (pendingEvents.length > 0) {
       yield pendingEvents.shift()!;
     }
 
+    const errorMessage = error instanceof Error ? error.message : "An error occurred";
+    console.error("Yielding error to client:", errorMessage);
+
     yield {
       type: "error",
-      message: error instanceof Error ? error.message : "An error occurred",
+      message: errorMessage,
     };
   }
 }
