@@ -124,9 +124,19 @@ ERROR HANDLING:
 
 Be friendly, practical, and focused on helping them track and use their ingredients effectively.`;
 
+interface HistoryAttachment {
+  type: "image";
+  data: string; // base64 or data URL
+  mimeType: string;
+}
+
 export interface ChatAgentInput {
   message: string;
-  conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
+  conversationHistory?: Array<{
+    role: "user" | "assistant";
+    content: string;
+    attachments?: HistoryAttachment[];
+  }>;
   imageBase64?: string;
   imageMimeType?: string;
 }
@@ -233,10 +243,22 @@ export async function runChatAgent(input: ChatAgentInput): Promise<ChatAgentResu
     { role: "system", content: SYSTEM_PROMPT },
   ];
 
-  // Add conversation history
+  // Add conversation history with multimodal support
   if (input.conversationHistory) {
     for (const msg of input.conversationHistory) {
-      chatPrompt.push({ role: msg.role, content: msg.content });
+      // Check if this history message has image attachments
+      const imageAttachment = msg.attachments?.find(a => a.type === "image");
+      if (imageAttachment && msg.role === "user") {
+        // Rebuild multimodal content for user messages with images
+        const historyContent = buildUserMessage(
+          msg.content,
+          imageAttachment.data,
+          imageAttachment.mimeType
+        );
+        chatPrompt.push({ role: msg.role, content: historyContent });
+      } else {
+        chatPrompt.push({ role: msg.role, content: msg.content });
+      }
     }
   }
 
@@ -338,10 +360,22 @@ export async function* streamChatAgent(
       { role: "system", content: SYSTEM_PROMPT },
     ];
 
-    // Add conversation history
+    // Add conversation history with multimodal support
     if (input.conversationHistory) {
       for (const msg of input.conversationHistory) {
-        chatPrompt.push({ role: msg.role, content: msg.content });
+        // Check if this history message has image attachments
+        const imageAttachment = msg.attachments?.find(a => a.type === "image");
+        if (imageAttachment && msg.role === "user") {
+          // Rebuild multimodal content for user messages with images
+          const historyContent = buildUserMessage(
+            msg.content,
+            imageAttachment.data,
+            imageAttachment.mimeType
+          );
+          chatPrompt.push({ role: msg.role, content: historyContent });
+        } else {
+          chatPrompt.push({ role: msg.role, content: msg.content });
+        }
       }
     }
 
