@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useChat } from '@/hooks/useChat';
-import { ChatInput } from './ChatInput';
+import { ChatInput, ChatInputHandle } from './ChatInput';
 import { MessageBubble } from './MessageBubble';
 import { QuickActionChips } from './QuickActionChips';
 import { ThinkingIndicator } from './ThinkingIndicator';
@@ -19,6 +19,7 @@ interface ChatContainerProps {
 export function ChatContainer({ className }: ChatContainerProps) {
     const { messages, isThinking, isStreaming, thinkingText, activeTools, sendMessage } = useChat();
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const chatInputRef = useRef<ChatInputHandle>(null);
     const [isInventoryOpen, setIsInventoryOpen] = useState(false);
 
     const scrollToBottom = () => {
@@ -29,16 +30,10 @@ export function ChatContainer({ className }: ChatContainerProps) {
         scrollToBottom();
     }, [messages, isThinking, isStreaming, activeTools]);
 
-    const handleQuickAction = (action: 'scan' | 'recipe' | 'inventory') => {
-        switch (action) {
-            case 'scan':
-                break;
-            case 'recipe':
-                sendMessage("What can I cook with my current inventory?");
-                break;
-            case 'inventory':
-                setIsInventoryOpen(true);
-                break;
+    const handleQuickAction = (text: string, openCamera?: boolean) => {
+        chatInputRef.current?.setText(text);
+        if (openCamera) {
+            chatInputRef.current?.openCamera();
         }
     };
 
@@ -198,7 +193,7 @@ export function ChatContainer({ className }: ChatContainerProps) {
                         )}
                     </AnimatePresence>
 
-                    <ChatInput onSend={sendMessage} disabled={isThinking || isStreaming} />
+                    <ChatInput onSend={sendMessage} disabled={isThinking || isStreaming} ref={chatInputRef} />
                 </div>
             </div>
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Camera, Send, X, ImagePlus } from 'lucide-react';
 import { Attachment } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -9,13 +9,21 @@ import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CameraCapture } from './CameraCapture';
 
+export interface ChatInputHandle {
+    setText: (text: string) => void;
+    openCamera: () => void;
+}
+
 interface ChatInputProps {
     onSend: (message: string, attachments?: Attachment[]) => void;
     disabled?: boolean;
     placeholder?: string;
 }
 
-export function ChatInput({ onSend, disabled, placeholder = "Ask about your kitchen..." }: ChatInputProps) {
+export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput(
+    { onSend, disabled, placeholder = "Ask about your kitchen..." },
+    ref
+) {
     const [text, setText] = useState('');
     const [attachments, setAttachments] = useState<Attachment[]>([]);
     const [isFocused, setIsFocused] = useState(false);
@@ -23,6 +31,17 @@ export function ChatInput({ onSend, disabled, placeholder = "Ask about your kitc
     const [isCameraOpen, setIsCameraOpen] = useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useImperativeHandle(ref, () => ({
+        setText: (newText: string) => {
+            setText(newText);
+            // Focus the textarea after setting text
+            setTimeout(() => textareaRef.current?.focus(), 0);
+        },
+        openCamera: () => {
+            setIsCameraOpen(true);
+        },
+    }));
 
     const hasContent = text.trim() || attachments.length > 0;
 
@@ -251,4 +270,4 @@ export function ChatInput({ onSend, disabled, placeholder = "Ask about your kitc
             />
         </>
     );
-}
+});
