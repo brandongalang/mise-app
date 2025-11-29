@@ -30,14 +30,33 @@ const parseImageSignature = ax(
 );
 parseImageSignature.setInstruction(IMAGE_PARSE_PROMPT);
 
+// Helper to parse base64 image data into the format expected by ax
+function parseImageData(imageBase64: string): { mimeType: string; data: string } {
+  // Check if it's a data URL (e.g., "data:image/jpeg;base64,/9j/...")
+  const dataUrlMatch = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
+  if (dataUrlMatch) {
+    return {
+      mimeType: dataUrlMatch[1],
+      data: dataUrlMatch[2],
+    };
+  }
+  // Otherwise assume it's raw base64 and default to JPEG
+  return {
+    mimeType: "image/jpeg",
+    data: imageBase64,
+  };
+}
+
 export async function parseImage(
   imageBase64: string,
   sourceHint?: "receipt" | "fridge" | "groceries"
 ): Promise<VisionExtractionResult> {
+  const imageData = parseImageData(imageBase64);
+
   const result = await parseImageSignature.forward(
     getLlm(),
     {
-      imageData: imageBase64,
+      imageData,
       sourceHint: sourceHint || undefined,
     }
   );
