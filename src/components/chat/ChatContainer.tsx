@@ -6,6 +6,7 @@ import { ChatInput } from './ChatInput';
 import { MessageBubble } from './MessageBubble';
 import { QuickActionChips } from './QuickActionChips';
 import { ThinkingIndicator } from './ThinkingIndicator';
+import { ToolCallsContainer } from './ToolCall';
 import { RecipeCard } from '@/lib/types';
 import { InventorySheet } from '@/components/inventory/InventorySheet';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -16,7 +17,7 @@ interface ChatContainerProps {
 }
 
 export function ChatContainer({ className }: ChatContainerProps) {
-    const { messages, isThinking, thinkingText, sendMessage } = useChat();
+    const { messages, isThinking, isStreaming, thinkingText, activeTools, sendMessage } = useChat();
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const [isInventoryOpen, setIsInventoryOpen] = useState(false);
 
@@ -26,7 +27,7 @@ export function ChatContainer({ className }: ChatContainerProps) {
 
     useEffect(() => {
         scrollToBottom();
-    }, [messages, isThinking]);
+    }, [messages, isThinking, isStreaming, activeTools]);
 
     const handleQuickAction = (action: 'scan' | 'recipe' | 'inventory') => {
         switch (action) {
@@ -44,6 +45,10 @@ export function ChatContainer({ className }: ChatContainerProps) {
     const handleRecipeExpand = (recipe: RecipeCard) => {
         console.log('Expand recipe:', recipe);
     };
+
+    // Find the last assistant message for streaming indicator
+    const lastAssistantIndex = messages.findLastIndex(m => m.role === 'assistant');
+    const hasActiveTools = activeTools.length > 0;
 
     return (
         <div className={`flex flex-col h-full bg-ivory ${className}`}>
@@ -136,12 +141,30 @@ export function ChatContainer({ className }: ChatContainerProps) {
                                 >
                                     <MessageBubble
                                         message={msg}
+                                        isStreaming={isStreaming && index === lastAssistantIndex}
                                         onRecipeExpand={handleRecipeExpand}
                                     />
                                 </motion.div>
                             ))}
 
-                            {isThinking && (
+                            {/* Active Tool Calls (shown while processing) */}
+                            {hasActiveTools && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="flex gap-3"
+                                >
+                                    <div className="flex-shrink-0 w-8 h-8 rounded-xl bg-gradient-to-br from-terracotta/20 to-marigold/20 flex items-center justify-center">
+                                        <ChefHat className="w-4 h-4 text-terracotta" />
+                                    </div>
+                                    <div className="flex-1 max-w-[80%]">
+                                        <ToolCallsContainer tools={activeTools} />
+                                    </div>
+                                </motion.div>
+                            )}
+
+                            {/* Thinking Indicator (shown before tools or response) */}
+                            {isThinking && !hasActiveTools && (
                                 <motion.div
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
@@ -175,7 +198,7 @@ export function ChatContainer({ className }: ChatContainerProps) {
                         )}
                     </AnimatePresence>
 
-                    <ChatInput onSend={sendMessage} disabled={isThinking} />
+                    <ChatInput onSend={sendMessage} disabled={isThinking || isStreaming} />
                 </div>
             </div>
 

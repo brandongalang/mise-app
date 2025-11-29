@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import { supabase } from "@/db/supabase";
+import { api } from "@/db/supabase";
 import type {
   SearchInventoryFilters,
   InventoryItem,
@@ -11,14 +11,22 @@ import type {
   ContainerStatus,
 } from "@/lib/types";
 
-const LOW_THRESHOLD = 0.20;
+// ============================================
+// CONSTANTS
+// ============================================
 
-// Helper: slugify name to create ID
+const LOW_THRESHOLD = 0.20;
+const DEFAULT_LEFTOVER_DAYS = 4;
+const DUPLICATE_CHECK_HOURS = 4;
+
+// ============================================
+// UTILITY FUNCTIONS
+// ============================================
+
 function slugify(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
-// Helper: calculate days until expiry
 function daysUntilExpiry(expiresAt: string | null): number | null {
   if (!expiresAt) return null;
   const now = new Date();
@@ -27,31 +35,71 @@ function daysUntilExpiry(expiresAt: string | null): number | null {
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 }
 
-// Helper: get or create master ingredient
+function capitalize(str: string): string {
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+}
+
+// Jaccard similarity on character bigrams
+function similarityScore(a: string, b: string): number {
+  const bigramsA = new Set<string>();
+  const bigramsB = new Set<string>();
+
+  for (let i = 0; i < a.length - 1; i++) bigramsA.add(a.slice(i, i + 2));
+  for (let i = 0; i < b.length - 1; i++) bigramsB.add(b.slice(i, i + 2));
+
+  const intersection = [...bigramsA].filter((x) => bigramsB.has(x)).length;
+  const union = new Set([...bigramsA, ...bigramsB]).size;
+
+  return union === 0 ? 0 : intersection / union;
+}
+
+// Transform raw container data to InventoryItem
+function toInventoryItem(raw: any): InventoryItem {
+  const content = raw.contents?.[0];
+  const master = raw.master_ingredients;
+
+  return {
+    id: raw.id,
+    containerId: raw.id,
+    masterId: master?.id || raw.master_id,
+    name: raw.dish_name || master?.canonical_name || "Unknown",
+    category: master?.category || null,
+    quantity: content?.remaining_qty || 0,
+    remainingQty: content?.remaining_qty || 0,
+    unit: content?.unit || "",
+    status: raw.status as ContainerStatus,
+    purchaseUnit: raw.purchase_unit,
+    expiresAt: raw.expires_at ? new Date(raw.expires_at) : null,
+    daysUntilExpiry: daysUntilExpiry(raw.expires_at) ?? 0,
+    isLeftover: !!raw.dish_name,
+    dishName: raw.dish_name,
+    confidence: raw.confidence,
+    source: raw.source,
+    createdAt: new Date(raw.created_at),
+  };
+}
+
+// ============================================
+// MASTER INGREDIENT MANAGEMENT
+// ============================================
+
 async function getOrCreateMaster(item: AddInventoryItem): Promise<string> {
+  // Check if masterId provided and exists
   if (item.masterId) {
-    const { data: existing } = await supabase
-      .from("master_ingredients")
-      .select("id")
-      .eq("id", item.masterId)
-      .single();
+    const existing = await api.masterIngredients.findById(item.masterId);
     if (existing) return existing.id;
   }
 
   const id = slugify(item.name);
 
   // Check if exists
-  const { data: existing } = await supabase
-    .from("master_ingredients")
-    .select("id")
-    .eq("id", id)
-    .single();
+  const existing = await api.masterIngredients.findById(id);
   if (existing) return existing.id;
 
-  // Create new
-  await supabase.from("master_ingredients").insert({
+  // Create new master ingredient
+  await api.masterIngredients.create({
     id,
-    canonical_name: item.name.charAt(0).toUpperCase() + item.name.slice(1).toLowerCase(),
+    canonical_name: capitalize(item.name),
     category: item.category || "unknown",
     default_unit: item.defaultUnit || item.contents.unit,
     default_shelf_life_days: item.defaultShelfLifeDays,
@@ -60,101 +108,29 @@ async function getOrCreateMaster(item: AddInventoryItem): Promise<string> {
   return id;
 }
 
-// Helper: convert units
-async function convertUnits(fromQty: number, fromUnit: string, toUnit: string): Promise<number | null> {
-  if (fromUnit === toUnit) return fromQty;
-
-  const { data: conversion } = await supabase
-    .from("global_unit_conversions")
-    .select("factor")
-    .eq("from_unit", fromUnit)
-    .eq("to_unit", toUnit)
-    .single();
-
-  if (conversion) {
-    return fromQty * conversion.factor;
-  }
-
-  // Try reverse
-  const { data: reverseConversion } = await supabase
-    .from("global_unit_conversions")
-    .select("factor")
-    .eq("from_unit", toUnit)
-    .eq("to_unit", fromUnit)
-    .single();
-
-  if (reverseConversion) {
-    return fromQty / reverseConversion.factor;
-  }
-
-  return null;
-}
-
+// ============================================
 // SEARCH INVENTORY
+// ============================================
+
 export async function searchInventory(filters: SearchInventoryFilters = {}): Promise<InventoryItem[]> {
-  let query = supabase
-    .from("containers")
-    .select(`
-      *,
-      contents (*),
-      master_ingredients (*)
-    `)
-    .neq("status", "DELETED");
+  const expiringBefore = filters.expiringWithinDays !== undefined
+    ? new Date(Date.now() + filters.expiringWithinDays * 24 * 60 * 60 * 1000)
+    : undefined;
 
-  if (filters.status && filters.status.length > 0) {
-    query = query.in("status", filters.status);
-  }
+  const results = await api.containers.findActive({
+    masterId: filters.masterId,
+    statuses: filters.status,
+    expiringBefore,
+    isDishOnly: filters.includeLeftovers === false ? false : undefined,
+    limit: filters.limit || 100,
+  });
 
-  if (filters.masterId) {
-    query = query.eq("master_id", filters.masterId);
-  }
-
-  if (filters.includeLeftovers === false) {
-    query = query.is("dish_name", null);
-  }
-
-  if (filters.expiringWithinDays !== undefined) {
-    const futureDate = new Date();
-    futureDate.setDate(futureDate.getDate() + filters.expiringWithinDays);
-    query = query.lte("expires_at", futureDate.toISOString()).not("expires_at", "is", null);
-  }
-
-  query = query.limit(filters.limit || 100);
-
-  const { data: results, error } = await query;
-
-  if (error) {
-    console.error("Search inventory error:", error);
-    return [];
-  }
-
-  let items: InventoryItem[] = (results || [])
+  // Transform and filter
+  let items = results
     .filter((r: any) => r.contents && r.contents.length > 0)
-    .map((r: any) => {
-      const content = r.contents[0];
-      const master = r.master_ingredients;
-      return {
-        id: r.id,
-        containerId: r.id,
-        masterId: master?.id || r.master_id,
-        name: r.dish_name || master?.canonical_name || "Unknown",
-        category: master?.category || null,
-        quantity: content.remaining_qty,
-        remainingQty: content.remaining_qty,
-        unit: content.unit,
-        status: r.status as ContainerStatus,
-        purchaseUnit: r.purchase_unit,
-        expiresAt: r.expires_at ? new Date(r.expires_at) : null,
-        daysUntilExpiry: daysUntilExpiry(r.expires_at) ?? 0,
-        isLeftover: !!r.dish_name,
-        dishName: r.dish_name,
-        confidence: r.confidence,
-        source: r.source,
-        createdAt: new Date(r.created_at),
-      };
-    });
+    .map(toInventoryItem);
 
-  // Filter by query (name search)
+  // Name/query search
   if (filters.query) {
     const queryLower = filters.query.toLowerCase();
     items = items.filter(
@@ -164,7 +140,7 @@ export async function searchInventory(filters: SearchInventoryFilters = {}): Pro
     );
   }
 
-  // Filter by category
+  // Category filter
   if (filters.category) {
     items = items.filter((item) => item.category === filters.category);
   }
@@ -172,7 +148,10 @@ export async function searchInventory(filters: SearchInventoryFilters = {}): Pro
   return items;
 }
 
+// ============================================
 // ADD INVENTORY
+// ============================================
+
 export async function addInventory(items: AddInventoryItem[]): Promise<{ containerIds: string[]; created: number }> {
   const containerIds: string[] = [];
 
@@ -183,7 +162,7 @@ export async function addInventory(items: AddInventoryItem[]): Promise<{ contain
     const transactionId = uuidv4();
 
     // Create container
-    await supabase.from("containers").insert({
+    await api.containers.create({
       id: containerId,
       master_id: masterId,
       status: item.container.status || "SEALED",
@@ -195,7 +174,7 @@ export async function addInventory(items: AddInventoryItem[]): Promise<{ contain
     });
 
     // Create contents
-    await supabase.from("contents").insert({
+    await api.contents.create({
       id: contentId,
       container_id: containerId,
       remaining_qty: item.contents.quantity,
@@ -203,7 +182,7 @@ export async function addInventory(items: AddInventoryItem[]): Promise<{ contain
     });
 
     // Log transaction
-    await supabase.from("transactions").insert({
+    await api.transactions.create({
       id: transactionId,
       container_id: containerId,
       operation: "ADD",
@@ -218,33 +197,39 @@ export async function addInventory(items: AddInventoryItem[]): Promise<{ contain
   return { containerIds, created: containerIds.length };
 }
 
+// ============================================
 // ADD LEFTOVER
+// ============================================
+
 export async function addLeftover(input: AddLeftoverInput): Promise<{ containerId: string }> {
   const containerId = uuidv4();
   const contentId = uuidv4();
   const transactionId = uuidv4();
 
   const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + (input.expiresInDays || 4));
+  expiresAt.setDate(expiresAt.getDate() + (input.expiresInDays || DEFAULT_LEFTOVER_DAYS));
 
-  await supabase.from("containers").insert({
+  // Create container for leftover
+  await api.containers.create({
     id: containerId,
-    master_id: null,
-    dish_name: input.dishName,
-    cooked_from_recipe_id: input.recipeId,
+    master_id: undefined,
     status: "OPEN",
     source: "cooked",
     expires_at: expiresAt.toISOString(),
+    dish_name: input.dishName,
+    cooked_from_recipe_id: input.recipeId,
   });
 
-  await supabase.from("contents").insert({
+  // Create contents
+  await api.contents.create({
     id: contentId,
     container_id: containerId,
     remaining_qty: input.quantity,
     unit: input.unit,
   });
 
-  await supabase.from("transactions").insert({
+  // Log transaction
+  await api.transactions.create({
     id: transactionId,
     container_id: containerId,
     operation: "ADD",
@@ -256,32 +241,26 @@ export async function addLeftover(input: AddLeftoverInput): Promise<{ containerI
   return { containerId };
 }
 
+// ============================================
 // UPDATE INVENTORY
+// ============================================
+
 export async function updateInventory(input: UpdateInventoryInput): Promise<{ success: boolean }> {
   const { containerId, updates, reason } = input;
 
   // Get current state
-  const { data: current, error } = await supabase
-    .from("containers")
-    .select(`*, contents (*)`)
-    .eq("id", containerId)
-    .single();
-
-  if (error || !current) {
+  const current = await api.containers.findById(containerId);
+  if (!current) {
     throw new Error(`Container ${containerId} not found`);
   }
 
-  // Update container if needed
+  // Update container fields
   if (updates.status || updates.expiresAt || updates.masterId) {
-    await supabase
-      .from("containers")
-      .update({
-        status: updates.status,
-        expires_at: updates.expiresAt?.toISOString(),
-        master_id: updates.masterId,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", containerId);
+    await api.containers.update(containerId, {
+      ...(updates.status && { status: updates.status }),
+      ...(updates.expiresAt && { expires_at: updates.expiresAt.toISOString() }),
+      ...(updates.masterId && { master_id: updates.masterId }),
+    });
   }
 
   // Update contents if needed
@@ -290,19 +269,15 @@ export async function updateInventory(input: UpdateInventoryInput): Promise<{ su
     const oldQty = content?.remaining_qty || 0;
     const newQty = updates.remainingQty ?? oldQty;
 
-    await supabase
-      .from("contents")
-      .update({
-        remaining_qty: newQty,
-        unit: updates.unit,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("container_id", containerId);
+    await api.contents.update(containerId, {
+      remaining_qty: newQty,
+      ...(updates.unit && { unit: updates.unit }),
+    });
 
-    // Log adjustment transaction
+    // Log adjustment transaction if quantity changed
     const delta = newQty - oldQty;
     if (delta !== 0) {
-      await supabase.from("transactions").insert({
+      await api.transactions.create({
         id: uuidv4(),
         container_id: containerId,
         operation: "ADJUST",
@@ -313,47 +288,38 @@ export async function updateInventory(input: UpdateInventoryInput): Promise<{ su
     }
   }
 
-  // If name changed, might need to update/create master
+  // Handle name correction with alias registration
   if (updates.name && updates.masterId) {
-    // Get old master
-    const { data: oldMaster } = await supabase
-      .from("master_ingredients")
-      .select("canonical_name")
-      .eq("id", current.master_id)
-      .single();
-
+    const oldMaster = await api.masterIngredients.findById(current.master_id);
     if (oldMaster) {
-      // Register alias from old name to new master
-      await supabase
-        .from("ingredient_aliases")
-        .upsert({
-          alias: oldMaster.canonical_name.toLowerCase(),
-          master_id: updates.masterId,
-          source: "user_correction",
-        }, { onConflict: "alias" });
+      await api.aliases.upsert(
+        oldMaster.canonical_name.toLowerCase(),
+        updates.masterId,
+        "user_correction"
+      );
     }
   }
 
   return { success: true };
 }
 
+// ============================================
 // DEDUCT INVENTORY (FIFO)
+// ============================================
+
 export async function deductInventory(input: DeductInventoryInput): Promise<DeductResult> {
   const { masterId, quantity, unit, reason } = input;
 
-  // Find open containers for this ingredient (FIFO by created date)
-  const { data: availableContainers, error } = await supabase
-    .from("containers")
-    .select(`*, contents (*)`)
-    .eq("master_id", masterId)
-    .in("status", ["SEALED", "OPEN", "LOW"])
-    .order("created_at", { ascending: true });
+  // Find available containers (FIFO by created date)
+  const availableContainers = await api.containers.findByMasterId(
+    masterId,
+    ["SEALED", "OPEN", "LOW"]
+  );
 
-  if (error || !availableContainers || availableContainers.length === 0) {
+  if (availableContainers.length === 0) {
     throw new Error(`No available inventory for ${masterId}`);
   }
 
-  // Try to find container with matching or convertible unit
   const targetContainer = availableContainers[0];
   const targetContent = targetContainer.contents?.[0];
 
@@ -361,11 +327,10 @@ export async function deductInventory(input: DeductInventoryInput): Promise<Dedu
     throw new Error(`No contents found for container`);
   }
 
+  // Convert units if needed
   let deductQty = quantity;
-
-  // Try unit conversion if needed
   if (targetContent.unit !== unit) {
-    const converted = await convertUnits(quantity, unit, targetContent.unit);
+    const converted = await api.conversions.convert(quantity, unit, targetContent.unit);
     if (converted !== null) {
       deductQty = converted;
     } else {
@@ -377,14 +342,10 @@ export async function deductInventory(input: DeductInventoryInput): Promise<Dedu
   const newQty = Math.max(0, currentQty - deductQty);
   const actualDeducted = currentQty - newQty;
 
-  // If container was SEALED, open it
+  // Open sealed container
   if (targetContainer.status === "SEALED") {
-    await supabase
-      .from("containers")
-      .update({ status: "OPEN", updated_at: new Date().toISOString() })
-      .eq("id", targetContainer.id);
-
-    await supabase.from("transactions").insert({
+    await api.containers.update(targetContainer.id, { status: "OPEN" });
+    await api.transactions.create({
       id: uuidv4(),
       container_id: targetContainer.id,
       operation: "STATUS_CHANGE",
@@ -393,10 +354,7 @@ export async function deductInventory(input: DeductInventoryInput): Promise<Dedu
   }
 
   // Update contents
-  await supabase
-    .from("contents")
-    .update({ remaining_qty: newQty, updated_at: new Date().toISOString() })
-    .eq("container_id", targetContainer.id);
+  await api.contents.update(targetContainer.id, { remaining_qty: newQty });
 
   // Determine new status based on remaining quantity
   let newStatus: ContainerStatus = "OPEN";
@@ -405,14 +363,7 @@ export async function deductInventory(input: DeductInventoryInput): Promise<Dedu
   if (newQty === 0) {
     newStatus = "EMPTY";
   } else {
-    // Calculate percentage remaining
-    const { data: initialAdd } = await supabase
-      .from("transactions")
-      .select("delta")
-      .eq("container_id", targetContainer.id)
-      .eq("operation", "ADD")
-      .single();
-
+    const initialAdd = await api.transactions.findFirstAdd(targetContainer.id);
     const initialQty = initialAdd?.delta || currentQty;
     const remainingPct = newQty / initialQty;
 
@@ -424,14 +375,11 @@ export async function deductInventory(input: DeductInventoryInput): Promise<Dedu
 
   // Update status if changed
   if (newStatus !== targetContainer.status) {
-    await supabase
-      .from("containers")
-      .update({ status: newStatus, updated_at: new Date().toISOString() })
-      .eq("id", targetContainer.id);
+    await api.containers.update(targetContainer.id, { status: newStatus });
   }
 
   // Log deduction transaction
-  await supabase.from("transactions").insert({
+  await api.transactions.create({
     id: uuidv4(),
     container_id: targetContainer.id,
     operation: "DEDUCT",
@@ -451,14 +399,14 @@ export async function deductInventory(input: DeductInventoryInput): Promise<Dedu
   };
 }
 
-// DELETE INVENTORY (soft delete)
-export async function deleteInventory(containerId: string, reason: string): Promise<{ success: boolean }> {
-  await supabase
-    .from("containers")
-    .update({ status: "DELETED", updated_at: new Date().toISOString() })
-    .eq("id", containerId);
+// ============================================
+// DELETE INVENTORY (Soft Delete)
+// ============================================
 
-  await supabase.from("transactions").insert({
+export async function deleteInventory(containerId: string, reason: string): Promise<{ success: boolean }> {
+  await api.containers.softDelete(containerId);
+
+  await api.transactions.create({
     id: uuidv4(),
     container_id: containerId,
     operation: "DELETE",
@@ -468,19 +416,13 @@ export async function deleteInventory(containerId: string, reason: string): Prom
   return { success: true };
 }
 
+// ============================================
 // MERGE INVENTORY
-export async function mergeInventory(sourceId: string, targetId: string): Promise<{ success: boolean; newQty: number }> {
-  const { data: source } = await supabase
-    .from("containers")
-    .select(`*, contents (*)`)
-    .eq("id", sourceId)
-    .single();
+// ============================================
 
-  const { data: target } = await supabase
-    .from("containers")
-    .select(`*, contents (*)`)
-    .eq("id", targetId)
-    .single();
+export async function mergeInventory(sourceId: string, targetId: string): Promise<{ success: boolean; newQty: number }> {
+  const source = await api.containers.findById(sourceId);
+  const target = await api.containers.findById(targetId);
 
   if (!source || !target) {
     throw new Error("Source or target container not found");
@@ -500,7 +442,7 @@ export async function mergeInventory(sourceId: string, targetId: string): Promis
   // Convert source qty to target unit if needed
   let addQty = sourceContent.remaining_qty;
   if (sourceContent.unit !== targetContent.unit) {
-    const converted = await convertUnits(addQty, sourceContent.unit, targetContent.unit);
+    const converted = await api.conversions.convert(addQty, sourceContent.unit, targetContent.unit);
     if (converted !== null) {
       addQty = converted;
     }
@@ -509,19 +451,13 @@ export async function mergeInventory(sourceId: string, targetId: string): Promis
   const newQty = targetContent.remaining_qty + addQty;
 
   // Update target
-  await supabase
-    .from("contents")
-    .update({ remaining_qty: newQty, updated_at: new Date().toISOString() })
-    .eq("container_id", targetId);
+  await api.contents.update(targetId, { remaining_qty: newQty });
 
   // Soft delete source
-  await supabase
-    .from("containers")
-    .update({ status: "DELETED", updated_at: new Date().toISOString() })
-    .eq("id", sourceId);
+  await api.containers.softDelete(sourceId);
 
   // Log transactions
-  await supabase.from("transactions").insert([
+  await api.transactions.createMany([
     {
       id: uuidv4(),
       container_id: targetId,
@@ -543,7 +479,10 @@ export async function mergeInventory(sourceId: string, targetId: string): Promis
   return { success: true, newQty };
 }
 
+// ============================================
 // GET EXPIRING ITEMS
+// ============================================
+
 export async function getExpiringItems(withinDays: number = 3): Promise<InventoryItem[]> {
   return searchInventory({
     expiringWithinDays: withinDays,
@@ -551,7 +490,10 @@ export async function getExpiringItems(withinDays: number = 3): Promise<Inventor
   });
 }
 
+// ============================================
 // CHECK DUPLICATES
+// ============================================
+
 export async function checkDuplicates(
   masterId: string,
   visionJobId?: string,
@@ -561,8 +503,8 @@ export async function checkDuplicates(
   existingContainers: InventoryItem[];
   recommendation: "SKIP" | "MERGE" | "ADD_NEW" | "ASK_USER";
 }> {
-  const fourHoursAgo = new Date();
-  fourHoursAgo.setHours(fourHoursAgo.getHours() - 4);
+  const checkHoursAgo = new Date();
+  checkHoursAgo.setHours(checkHoursAgo.getHours() - DUPLICATE_CHECK_HOURS);
 
   const existing = await searchInventory({
     masterId,
@@ -575,20 +517,15 @@ export async function checkDuplicates(
 
   // Check for same vision job
   if (visionJobId) {
-    const { data: sameJob } = await supabase
-      .from("containers")
-      .select("id")
-      .eq("master_id", masterId)
-      .eq("vision_job_id", visionJobId)
-      .single();
-
+    const containers = await api.containers.findByMasterId(masterId);
+    const sameJob = containers.find((c: any) => c.vision_job_id === visionJobId);
     if (sameJob) {
       return { duplicateType: "DEFINITE", existingContainers: existing, recommendation: "SKIP" };
     }
   }
 
-  // Check for recently added (within 4 hours)
-  const recent = existing.filter((e) => e.createdAt > fourHoursAgo);
+  // Check for recently added
+  const recent = existing.filter((e) => e.createdAt > checkHoursAgo);
   if (recent.length > 0) {
     return { duplicateType: "LIKELY", existingContainers: recent, recommendation: "ASK_USER" };
   }
@@ -607,20 +544,23 @@ export async function checkDuplicates(
   return { duplicateType: "NONE", existingContainers: existing, recommendation: "ADD_NEW" };
 }
 
+// ============================================
 // REGISTER ALIAS
-export async function registerAlias(alias: string, masterId: string, source: "agent" | "user_correction" = "agent"): Promise<{ success: boolean }> {
-  await supabase
-    .from("ingredient_aliases")
-    .upsert({
-      alias: alias.toLowerCase(),
-      master_id: masterId,
-      source,
-    }, { onConflict: "alias" });
+// ============================================
 
+export async function registerAlias(
+  alias: string,
+  masterId: string,
+  source: "agent" | "user_correction" = "agent"
+): Promise<{ success: boolean }> {
+  await api.aliases.upsert(alias.toLowerCase(), masterId, source);
   return { success: true };
 }
 
-// RESOLVE INGREDIENT (fuzzy match)
+// ============================================
+// RESOLVE INGREDIENT (Fuzzy Match)
+// ============================================
+
 export async function resolveIngredient(
   rawName: string,
   categoryHint?: string
@@ -634,12 +574,7 @@ export async function resolveIngredient(
   const normalized = rawName.toLowerCase().trim();
 
   // Check exact match on master
-  const { data: exactMaster } = await supabase
-    .from("master_ingredients")
-    .select("id, canonical_name")
-    .eq("id", slugify(normalized))
-    .single();
-
+  const exactMaster = await api.masterIngredients.findById(slugify(normalized));
   if (exactMaster) {
     return {
       matchType: "exact",
@@ -651,13 +586,8 @@ export async function resolveIngredient(
   }
 
   // Check alias
-  const { data: alias } = await supabase
-    .from("ingredient_aliases")
-    .select(`*, master_ingredients (id, canonical_name)`)
-    .eq("alias", normalized)
-    .single();
-
-  if (alias && alias.master_ingredients) {
+  const alias = await api.aliases.findByAlias(normalized);
+  if (alias?.master_ingredients) {
     return {
       matchType: "alias",
       masterId: alias.master_ingredients.id,
@@ -668,16 +598,13 @@ export async function resolveIngredient(
   }
 
   // Fuzzy search - get all masters and score
-  const { data: allMasters } = await supabase
-    .from("master_ingredients")
-    .select("id, canonical_name");
-
-  if (!allMasters) {
+  const allMasters = await api.masterIngredients.findAll();
+  if (!allMasters.length) {
     return { matchType: "unknown", confidence: 0, alternatives: [] };
   }
 
   const scored = allMasters
-    .map((m) => ({
+    .map((m: any) => ({
       masterId: m.id,
       canonicalName: m.canonical_name,
       score: similarityScore(normalized, m.canonical_name.toLowerCase()),
@@ -708,18 +635,4 @@ export async function resolveIngredient(
     confidence: 0,
     alternatives: [],
   };
-}
-
-// Simple similarity score (Jaccard on character bigrams)
-function similarityScore(a: string, b: string): number {
-  const bigramsA = new Set<string>();
-  const bigramsB = new Set<string>();
-
-  for (let i = 0; i < a.length - 1; i++) bigramsA.add(a.slice(i, i + 2));
-  for (let i = 0; i < b.length - 1; i++) bigramsB.add(b.slice(i, i + 2));
-
-  const intersection = [...bigramsA].filter((x) => bigramsB.has(x)).length;
-  const union = new Set([...bigramsA, ...bigramsB]).size;
-
-  return union === 0 ? 0 : intersection / union;
 }

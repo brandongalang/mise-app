@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
-import { runAgent } from "@/agent";
+import { streamChatAgent } from "@/agent/chatAgent";
 
-export const maxDuration = 60; // Allow up to 60 seconds for vision processing
+export const maxDuration = 60; // Allow up to 60 seconds for tool execution
 
 interface ChatRequest {
   message: string | null;
@@ -46,36 +46,69 @@ export async function POST(req: NextRequest) {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
-        const sendEvent = (event: string, data: any) => {
+        const sendEvent = (event: string, data: unknown) => {
           controller.enqueue(
             encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
           );
         };
 
         try {
-          // Send thinking status
-          sendEvent("thinking", { status: imageBase64 ? "Analyzing your image..." : "Thinking..." });
-
-          // Run the agent
-          const result = await runAgent({
-            message: body.message || "Process this image",
+          // Stream agent responses
+          const agentStream = streamChatAgent({
+            message: body.message || "Please analyze this image",
+            conversationHistory: body.conversationHistory,
             imageBase64,
             imageMimeType,
-            conversationHistory: body.conversationHistory,
           });
 
-          // Send the response
-          sendEvent("message", { content: result.response });
+          let fullContent = "";
+          const toolsUsed: string[] = [];
 
-          // Send actions taken (for debugging/transparency)
-          if (result.actionsTaken && result.actionsTaken.length > 0) {
-            sendEvent("actions", { actions: result.actionsTaken });
+          for await (const event of agentStream) {
+            switch (event.type) {
+              case "thinking":
+                sendEvent("thinking", { status: event.status });
+                break;
+
+              case "tool_start":
+                sendEvent("tool_start", {
+                  id: event.id,
+                  name: event.name,
+                  args: event.args,
+                });
+                toolsUsed.push(event.name);
+                break;
+
+              case "tool_end":
+                sendEvent("tool_end", {
+                  id: event.id,
+                  name: event.name,
+                  result: event.result,
+                  error: event.error,
+                });
+                break;
+
+              case "stream":
+                fullContent += event.token;
+                sendEvent("stream", { token: event.token, index: event.index });
+                break;
+
+              case "complete":
+                // Send final message for fallback
+                sendEvent("message", { content: fullContent });
+                // Send actions taken for transparency
+                sendEvent("actions", { actions: toolsUsed });
+                sendEvent("complete", { success: true });
+                break;
+
+              case "error":
+                console.error("Agent error:", event.message);
+                sendEvent("error", { message: event.message });
+                break;
+            }
           }
-
-          // Complete
-          sendEvent("complete", { success: true });
         } catch (error) {
-          console.error("Agent error:", error);
+          console.error("Chat API error:", error);
           sendEvent("error", {
             message: error instanceof Error ? error.message : "An error occurred",
           });
