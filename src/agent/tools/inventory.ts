@@ -1,6 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import { eq, and, or, like, lte, isNull, isNotNull, inArray, sql } from "drizzle-orm";
-import { db, containers, contents, masterIngredients, ingredientAliases, transactions, globalUnitConversions } from "@/db";
+import { supabase } from "@/db/supabase";
 import type {
   SearchInventoryFilters,
   InventoryItem,
@@ -20,37 +19,42 @@ function slugify(name: string): string {
 }
 
 // Helper: calculate days until expiry
-function daysUntilExpiry(expiresAt: Date | null): number | null {
+function daysUntilExpiry(expiresAt: string | null): number | null {
   if (!expiresAt) return null;
   const now = new Date();
-  const diffTime = expiresAt.getTime() - now.getTime();
+  const expiry = new Date(expiresAt);
+  const diffTime = expiry.getTime() - now.getTime();
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 }
 
 // Helper: get or create master ingredient
 async function getOrCreateMaster(item: AddInventoryItem): Promise<string> {
   if (item.masterId) {
-    const existing = await db.query.masterIngredients.findFirst({
-      where: eq(masterIngredients.id, item.masterId),
-    });
+    const { data: existing } = await supabase
+      .from("master_ingredients")
+      .select("id")
+      .eq("id", item.masterId)
+      .single();
     if (existing) return existing.id;
   }
 
   const id = slugify(item.name);
 
   // Check if exists
-  const existing = await db.query.masterIngredients.findFirst({
-    where: eq(masterIngredients.id, id),
-  });
+  const { data: existing } = await supabase
+    .from("master_ingredients")
+    .select("id")
+    .eq("id", id)
+    .single();
   if (existing) return existing.id;
 
   // Create new
-  await db.insert(masterIngredients).values({
+  await supabase.from("master_ingredients").insert({
     id,
-    canonicalName: item.name.charAt(0).toUpperCase() + item.name.slice(1).toLowerCase(),
+    canonical_name: item.name.charAt(0).toUpperCase() + item.name.slice(1).toLowerCase(),
     category: item.category || "unknown",
-    defaultUnit: item.defaultUnit || item.contents.unit,
-    defaultShelfLifeDays: item.defaultShelfLifeDays,
+    default_unit: item.defaultUnit || item.contents.unit,
+    default_shelf_life_days: item.defaultShelfLifeDays,
   });
 
   return id;
@@ -60,24 +64,24 @@ async function getOrCreateMaster(item: AddInventoryItem): Promise<string> {
 async function convertUnits(fromQty: number, fromUnit: string, toUnit: string): Promise<number | null> {
   if (fromUnit === toUnit) return fromQty;
 
-  const conversion = await db.query.globalUnitConversions.findFirst({
-    where: and(
-      eq(globalUnitConversions.fromUnit, fromUnit),
-      eq(globalUnitConversions.toUnit, toUnit)
-    ),
-  });
+  const { data: conversion } = await supabase
+    .from("global_unit_conversions")
+    .select("factor")
+    .eq("from_unit", fromUnit)
+    .eq("to_unit", toUnit)
+    .single();
 
   if (conversion) {
     return fromQty * conversion.factor;
   }
 
   // Try reverse
-  const reverseConversion = await db.query.globalUnitConversions.findFirst({
-    where: and(
-      eq(globalUnitConversions.fromUnit, toUnit),
-      eq(globalUnitConversions.toUnit, fromUnit)
-    ),
-  });
+  const { data: reverseConversion } = await supabase
+    .from("global_unit_conversions")
+    .select("factor")
+    .eq("from_unit", toUnit)
+    .eq("to_unit", fromUnit)
+    .single();
 
   if (reverseConversion) {
     return fromQty / reverseConversion.factor;
@@ -88,73 +92,75 @@ async function convertUnits(fromQty: number, fromUnit: string, toUnit: string): 
 
 // SEARCH INVENTORY
 export async function searchInventory(filters: SearchInventoryFilters = {}): Promise<InventoryItem[]> {
-  const conditions = [];
-
-  // Exclude deleted by default
-  if (!filters.status?.includes("DELETED")) {
-    conditions.push(sql`${containers.status} != 'DELETED'`);
-  }
+  let query = supabase
+    .from("containers")
+    .select(`
+      *,
+      contents (*),
+      master_ingredients (*)
+    `)
+    .neq("status", "DELETED");
 
   if (filters.status && filters.status.length > 0) {
-    conditions.push(inArray(containers.status, filters.status));
+    query = query.in("status", filters.status);
   }
 
   if (filters.masterId) {
-    conditions.push(eq(containers.masterId, filters.masterId));
+    query = query.eq("master_id", filters.masterId);
   }
 
   if (filters.includeLeftovers === false) {
-    conditions.push(isNull(containers.dishName));
+    query = query.is("dish_name", null);
   }
 
   if (filters.expiringWithinDays !== undefined) {
     const futureDate = new Date();
     futureDate.setDate(futureDate.getDate() + filters.expiringWithinDays);
-    conditions.push(lte(containers.expiresAt, futureDate));
-    conditions.push(isNotNull(containers.expiresAt));
+    query = query.lte("expires_at", futureDate.toISOString()).not("expires_at", "is", null);
   }
 
-  const results = await db
-    .select({
-      container: containers,
-      content: contents,
-      master: masterIngredients,
-    })
-    .from(containers)
-    .leftJoin(contents, eq(containers.id, contents.containerId))
-    .leftJoin(masterIngredients, eq(containers.masterId, masterIngredients.id))
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .limit(filters.limit || 100);
+  query = query.limit(filters.limit || 100);
 
-  let items: InventoryItem[] = results
-    .filter((r) => r.content) // Must have contents
-    .map((r) => ({
-      id: r.container.id,
-      containerId: r.container.id,
-      masterId: r.master?.id || r.container.masterId,
-      name: r.container.dishName || r.master?.canonicalName || "Unknown",
-      category: r.master?.category || null,
-      quantity: r.content!.remainingQty,
-      remainingQty: r.content!.remainingQty,
-      unit: r.content!.unit,
-      status: r.container.status as ContainerStatus,
-      purchaseUnit: r.container.purchaseUnit,
-      expiresAt: r.container.expiresAt,
-      daysUntilExpiry: daysUntilExpiry(r.container.expiresAt) ?? 0, // Fallback to 0 if null
-      isLeftover: !!r.container.dishName,
-      dishName: r.container.dishName,
-      confidence: r.container.confidence as any,
-      source: r.container.source as any,
-      createdAt: r.container.createdAt!,
-    }));
+  const { data: results, error } = await query;
+
+  if (error) {
+    console.error("Search inventory error:", error);
+    return [];
+  }
+
+  let items: InventoryItem[] = (results || [])
+    .filter((r: any) => r.contents && r.contents.length > 0)
+    .map((r: any) => {
+      const content = r.contents[0];
+      const master = r.master_ingredients;
+      return {
+        id: r.id,
+        containerId: r.id,
+        masterId: master?.id || r.master_id,
+        name: r.dish_name || master?.canonical_name || "Unknown",
+        category: master?.category || null,
+        quantity: content.remaining_qty,
+        remainingQty: content.remaining_qty,
+        unit: content.unit,
+        status: r.status as ContainerStatus,
+        purchaseUnit: r.purchase_unit,
+        expiresAt: r.expires_at ? new Date(r.expires_at) : null,
+        daysUntilExpiry: daysUntilExpiry(r.expires_at) ?? 0,
+        isLeftover: !!r.dish_name,
+        dishName: r.dish_name,
+        confidence: r.confidence,
+        source: r.source,
+        createdAt: new Date(r.created_at),
+      };
+    });
 
   // Filter by query (name search)
   if (filters.query) {
-    const query = filters.query.toLowerCase();
+    const queryLower = filters.query.toLowerCase();
     items = items.filter(
       (item) =>
-        item.name.toLowerCase().includes(query) ||
-        item.dishName?.toLowerCase().includes(query)
+        item.name.toLowerCase().includes(queryLower) ||
+        item.dishName?.toLowerCase().includes(queryLower)
     );
   }
 
@@ -177,29 +183,29 @@ export async function addInventory(items: AddInventoryItem[]): Promise<{ contain
     const transactionId = uuidv4();
 
     // Create container
-    await db.insert(containers).values({
+    await supabase.from("containers").insert({
       id: containerId,
-      masterId,
+      master_id: masterId,
       status: item.container.status || "SEALED",
-      purchaseUnit: item.container.unit,
+      purchase_unit: item.container.unit,
       source: item.source,
       confidence: item.confidence,
-      visionJobId: item.visionJobId,
-      expiresAt: item.expiresAt,
+      vision_job_id: item.visionJobId,
+      expires_at: item.expiresAt?.toISOString(),
     });
 
     // Create contents
-    await db.insert(contents).values({
+    await supabase.from("contents").insert({
       id: contentId,
-      containerId,
-      remainingQty: item.contents.quantity,
+      container_id: containerId,
+      remaining_qty: item.contents.quantity,
       unit: item.contents.unit,
     });
 
     // Log transaction
-    await db.insert(transactions).values({
+    await supabase.from("transactions").insert({
       id: transactionId,
-      containerId,
+      container_id: containerId,
       operation: "ADD",
       delta: item.contents.quantity,
       unit: item.contents.unit,
@@ -221,26 +227,26 @@ export async function addLeftover(input: AddLeftoverInput): Promise<{ containerI
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + (input.expiresInDays || 4));
 
-  await db.insert(containers).values({
+  await supabase.from("containers").insert({
     id: containerId,
-    masterId: null,
-    dishName: input.dishName,
-    cookedFromRecipeId: input.recipeId,
+    master_id: null,
+    dish_name: input.dishName,
+    cooked_from_recipe_id: input.recipeId,
     status: "OPEN",
     source: "cooked",
-    expiresAt,
+    expires_at: expiresAt.toISOString(),
   });
 
-  await db.insert(contents).values({
+  await supabase.from("contents").insert({
     id: contentId,
-    containerId,
-    remainingQty: input.quantity,
+    container_id: containerId,
+    remaining_qty: input.quantity,
     unit: input.unit,
   });
 
-  await db.insert(transactions).values({
+  await supabase.from("transactions").insert({
     id: transactionId,
-    containerId,
+    container_id: containerId,
     operation: "ADD",
     delta: input.quantity,
     unit: input.unit,
@@ -255,49 +261,53 @@ export async function updateInventory(input: UpdateInventoryInput): Promise<{ su
   const { containerId, updates, reason } = input;
 
   // Get current state
-  const current = await db.query.containers.findFirst({
-    where: eq(containers.id, containerId),
-    with: { contents: true },
-  });
+  const { data: current, error } = await supabase
+    .from("containers")
+    .select(`*, contents (*)`)
+    .eq("id", containerId)
+    .single();
 
-  if (!current) {
+  if (error || !current) {
     throw new Error(`Container ${containerId} not found`);
   }
 
   // Update container if needed
   if (updates.status || updates.expiresAt || updates.masterId) {
-    await db.update(containers)
-      .set({
+    await supabase
+      .from("containers")
+      .update({
         status: updates.status,
-        expiresAt: updates.expiresAt,
-        masterId: updates.masterId,
-        updatedAt: new Date(),
+        expires_at: updates.expiresAt?.toISOString(),
+        master_id: updates.masterId,
+        updated_at: new Date().toISOString(),
       })
-      .where(eq(containers.id, containerId));
+      .eq("id", containerId);
   }
 
   // Update contents if needed
   if (updates.remainingQty !== undefined || updates.unit) {
-    const oldQty = current.contents?.remainingQty || 0;
+    const content = current.contents?.[0];
+    const oldQty = content?.remaining_qty || 0;
     const newQty = updates.remainingQty ?? oldQty;
 
-    await db.update(contents)
-      .set({
-        remainingQty: newQty,
+    await supabase
+      .from("contents")
+      .update({
+        remaining_qty: newQty,
         unit: updates.unit,
-        updatedAt: new Date(),
+        updated_at: new Date().toISOString(),
       })
-      .where(eq(contents.containerId, containerId));
+      .eq("container_id", containerId);
 
     // Log adjustment transaction
     const delta = newQty - oldQty;
     if (delta !== 0) {
-      await db.insert(transactions).values({
+      await supabase.from("transactions").insert({
         id: uuidv4(),
-        containerId,
+        container_id: containerId,
         operation: "ADJUST",
         delta,
-        unit: updates.unit || current.contents?.unit,
+        unit: updates.unit || content?.unit,
         reason: reason || "manual_adjustment",
       });
     }
@@ -305,18 +315,22 @@ export async function updateInventory(input: UpdateInventoryInput): Promise<{ su
 
   // If name changed, might need to update/create master
   if (updates.name && updates.masterId) {
-    // Register alias from old name to new master
-    const oldMaster = await db.query.masterIngredients.findFirst({
-      where: eq(masterIngredients.id, current.masterId!),
-    });
+    // Get old master
+    const { data: oldMaster } = await supabase
+      .from("master_ingredients")
+      .select("canonical_name")
+      .eq("id", current.master_id)
+      .single();
+
     if (oldMaster) {
-      await db.insert(ingredientAliases)
-        .values({
-          alias: oldMaster.canonicalName.toLowerCase(),
-          masterId: updates.masterId,
+      // Register alias from old name to new master
+      await supabase
+        .from("ingredient_aliases")
+        .upsert({
+          alias: oldMaster.canonical_name.toLowerCase(),
+          master_id: updates.masterId,
           source: "user_correction",
-        })
-        .onConflictDoNothing();
+        }, { onConflict: "alias" });
     }
   }
 
@@ -328,61 +342,61 @@ export async function deductInventory(input: DeductInventoryInput): Promise<Dedu
   const { masterId, quantity, unit, reason } = input;
 
   // Find open containers for this ingredient (FIFO by created date)
-  const availableContainers = await db
-    .select({
-      container: containers,
-      content: contents,
-    })
-    .from(containers)
-    .innerJoin(contents, eq(containers.id, contents.containerId))
-    .where(
-      and(
-        eq(containers.masterId, masterId),
-        inArray(containers.status, ["SEALED", "OPEN", "LOW"])
-      )
-    )
-    .orderBy(containers.createdAt);
+  const { data: availableContainers, error } = await supabase
+    .from("containers")
+    .select(`*, contents (*)`)
+    .eq("master_id", masterId)
+    .in("status", ["SEALED", "OPEN", "LOW"])
+    .order("created_at", { ascending: true });
 
-  if (availableContainers.length === 0) {
+  if (error || !availableContainers || availableContainers.length === 0) {
     throw new Error(`No available inventory for ${masterId}`);
   }
 
   // Try to find container with matching or convertible unit
-  let targetContainer = availableContainers[0];
+  const targetContainer = availableContainers[0];
+  const targetContent = targetContainer.contents?.[0];
+
+  if (!targetContent) {
+    throw new Error(`No contents found for container`);
+  }
+
   let deductQty = quantity;
 
   // Try unit conversion if needed
-  if (targetContainer.content.unit !== unit) {
-    const converted = await convertUnits(quantity, unit, targetContainer.content.unit);
+  if (targetContent.unit !== unit) {
+    const converted = await convertUnits(quantity, unit, targetContent.unit);
     if (converted !== null) {
       deductQty = converted;
     } else {
-      console.warn(`Cannot convert ${unit} to ${targetContainer.content.unit}, using as-is`);
+      console.warn(`Cannot convert ${unit} to ${targetContent.unit}, using as-is`);
     }
   }
 
-  const currentQty = targetContainer.content.remainingQty;
+  const currentQty = targetContent.remaining_qty;
   const newQty = Math.max(0, currentQty - deductQty);
   const actualDeducted = currentQty - newQty;
 
   // If container was SEALED, open it
-  if (targetContainer.container.status === "SEALED") {
-    await db.update(containers)
-      .set({ status: "OPEN", updatedAt: new Date() })
-      .where(eq(containers.id, targetContainer.container.id));
+  if (targetContainer.status === "SEALED") {
+    await supabase
+      .from("containers")
+      .update({ status: "OPEN", updated_at: new Date().toISOString() })
+      .eq("id", targetContainer.id);
 
-    await db.insert(transactions).values({
+    await supabase.from("transactions").insert({
       id: uuidv4(),
-      containerId: targetContainer.container.id,
+      container_id: targetContainer.id,
       operation: "STATUS_CHANGE",
       reason: "opened_for_use",
     });
   }
 
   // Update contents
-  await db.update(contents)
-    .set({ remainingQty: newQty, updatedAt: new Date() })
-    .where(eq(contents.containerId, targetContainer.container.id));
+  await supabase
+    .from("contents")
+    .update({ remaining_qty: newQty, updated_at: new Date().toISOString() })
+    .eq("container_id", targetContainer.id);
 
   // Determine new status based on remaining quantity
   let newStatus: ContainerStatus = "OPEN";
@@ -391,13 +405,14 @@ export async function deductInventory(input: DeductInventoryInput): Promise<Dedu
   if (newQty === 0) {
     newStatus = "EMPTY";
   } else {
-    // Calculate percentage remaining (need initial qty - estimate from first transaction)
-    const initialAdd = await db.query.transactions.findFirst({
-      where: and(
-        eq(transactions.containerId, targetContainer.container.id),
-        eq(transactions.operation, "ADD")
-      ),
-    });
+    // Calculate percentage remaining
+    const { data: initialAdd } = await supabase
+      .from("transactions")
+      .select("delta")
+      .eq("container_id", targetContainer.id)
+      .eq("operation", "ADD")
+      .single();
+
     const initialQty = initialAdd?.delta || currentQty;
     const remainingPct = newQty / initialQty;
 
@@ -408,27 +423,28 @@ export async function deductInventory(input: DeductInventoryInput): Promise<Dedu
   }
 
   // Update status if changed
-  if (newStatus !== targetContainer.container.status) {
-    await db.update(containers)
-      .set({ status: newStatus, updatedAt: new Date() })
-      .where(eq(containers.id, targetContainer.container.id));
+  if (newStatus !== targetContainer.status) {
+    await supabase
+      .from("containers")
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .eq("id", targetContainer.id);
   }
 
   // Log deduction transaction
-  await db.insert(transactions).values({
+  await supabase.from("transactions").insert({
     id: uuidv4(),
-    containerId: targetContainer.container.id,
+    container_id: targetContainer.id,
     operation: "DEDUCT",
     delta: -actualDeducted,
-    unit: targetContainer.content.unit,
+    unit: targetContent.unit,
     reason,
   });
 
   return {
     success: true,
     deducted: actualDeducted,
-    unit: targetContainer.content.unit,
-    containerId: targetContainer.container.id,
+    unit: targetContent.unit,
+    containerId: targetContainer.id,
     remainingAfter: newQty,
     containerStatus: newStatus,
     warning,
@@ -437,13 +453,14 @@ export async function deductInventory(input: DeductInventoryInput): Promise<Dedu
 
 // DELETE INVENTORY (soft delete)
 export async function deleteInventory(containerId: string, reason: string): Promise<{ success: boolean }> {
-  await db.update(containers)
-    .set({ status: "DELETED", updatedAt: new Date() })
-    .where(eq(containers.id, containerId));
+  await supabase
+    .from("containers")
+    .update({ status: "DELETED", updated_at: new Date().toISOString() })
+    .eq("id", containerId);
 
-  await db.insert(transactions).values({
+  await supabase.from("transactions").insert({
     id: uuidv4(),
-    containerId,
+    container_id: containerId,
     operation: "DELETE",
     reason,
   });
@@ -453,61 +470,72 @@ export async function deleteInventory(containerId: string, reason: string): Prom
 
 // MERGE INVENTORY
 export async function mergeInventory(sourceId: string, targetId: string): Promise<{ success: boolean; newQty: number }> {
-  const source = await db.query.containers.findFirst({
-    where: eq(containers.id, sourceId),
-    with: { contents: true },
-  });
+  const { data: source } = await supabase
+    .from("containers")
+    .select(`*, contents (*)`)
+    .eq("id", sourceId)
+    .single();
 
-  const target = await db.query.containers.findFirst({
-    where: eq(containers.id, targetId),
-    with: { contents: true },
-  });
+  const { data: target } = await supabase
+    .from("containers")
+    .select(`*, contents (*)`)
+    .eq("id", targetId)
+    .single();
 
   if (!source || !target) {
     throw new Error("Source or target container not found");
   }
 
-  if (source.masterId !== target.masterId) {
+  if (source.master_id !== target.master_id) {
     throw new Error("Cannot merge containers with different ingredients");
   }
 
+  const sourceContent = source.contents?.[0];
+  const targetContent = target.contents?.[0];
+
+  if (!sourceContent || !targetContent) {
+    throw new Error("Missing contents");
+  }
+
   // Convert source qty to target unit if needed
-  let addQty = source.contents!.remainingQty;
-  if (source.contents!.unit !== target.contents!.unit) {
-    const converted = await convertUnits(addQty, source.contents!.unit, target.contents!.unit);
+  let addQty = sourceContent.remaining_qty;
+  if (sourceContent.unit !== targetContent.unit) {
+    const converted = await convertUnits(addQty, sourceContent.unit, targetContent.unit);
     if (converted !== null) {
       addQty = converted;
     }
   }
 
-  const newQty = target.contents!.remainingQty + addQty;
+  const newQty = targetContent.remaining_qty + addQty;
 
   // Update target
-  await db.update(contents)
-    .set({ remainingQty: newQty, updatedAt: new Date() })
-    .where(eq(contents.containerId, targetId));
+  await supabase
+    .from("contents")
+    .update({ remaining_qty: newQty, updated_at: new Date().toISOString() })
+    .eq("container_id", targetId);
 
   // Soft delete source
-  await db.update(containers)
-    .set({ status: "DELETED", updatedAt: new Date() })
-    .where(eq(containers.id, sourceId));
+  await supabase
+    .from("containers")
+    .update({ status: "DELETED", updated_at: new Date().toISOString() })
+    .eq("id", sourceId);
 
   // Log transactions
-  await db.insert(transactions).values([
+  await supabase.from("transactions").insert([
     {
       id: uuidv4(),
-      containerId: targetId,
+      container_id: targetId,
       operation: "MERGE",
       delta: addQty,
-      unit: target.contents!.unit,
+      unit: targetContent.unit,
       reason: `merged_from:${sourceId}`,
     },
     {
       id: uuidv4(),
-      containerId: sourceId,
+      container_id: sourceId,
       operation: "MERGE",
-      delta: -source.contents!.remainingQty,
-      unit: source.contents!.unit,
+      delta: -sourceContent.remaining_qty,
+      unit: sourceContent.unit,
       reason: `merged_into:${targetId}`,
     },
   ]);
@@ -547,12 +575,13 @@ export async function checkDuplicates(
 
   // Check for same vision job
   if (visionJobId) {
-    const sameJob = await db.query.containers.findFirst({
-      where: and(
-        eq(containers.masterId, masterId),
-        eq(containers.visionJobId, visionJobId)
-      ),
-    });
+    const { data: sameJob } = await supabase
+      .from("containers")
+      .select("id")
+      .eq("master_id", masterId)
+      .eq("vision_job_id", visionJobId)
+      .single();
+
     if (sameJob) {
       return { duplicateType: "DEFINITE", existingContainers: existing, recommendation: "SKIP" };
     }
@@ -580,16 +609,13 @@ export async function checkDuplicates(
 
 // REGISTER ALIAS
 export async function registerAlias(alias: string, masterId: string, source: "agent" | "user_correction" = "agent"): Promise<{ success: boolean }> {
-  await db.insert(ingredientAliases)
-    .values({
+  await supabase
+    .from("ingredient_aliases")
+    .upsert({
       alias: alias.toLowerCase(),
-      masterId,
+      master_id: masterId,
       source,
-    })
-    .onConflictDoUpdate({
-      target: ingredientAliases.alias,
-      set: { masterId, source },
-    });
+    }, { onConflict: "alias" });
 
   return { success: true };
 }
@@ -608,41 +634,53 @@ export async function resolveIngredient(
   const normalized = rawName.toLowerCase().trim();
 
   // Check exact match on master
-  const exactMaster = await db.query.masterIngredients.findFirst({
-    where: eq(masterIngredients.id, slugify(normalized)),
-  });
+  const { data: exactMaster } = await supabase
+    .from("master_ingredients")
+    .select("id, canonical_name")
+    .eq("id", slugify(normalized))
+    .single();
+
   if (exactMaster) {
     return {
       matchType: "exact",
       masterId: exactMaster.id,
-      canonicalName: exactMaster.canonicalName,
+      canonicalName: exactMaster.canonical_name,
       confidence: 1.0,
       alternatives: [],
     };
   }
 
   // Check alias
-  const alias = await db.query.ingredientAliases.findFirst({
-    where: eq(ingredientAliases.alias, normalized),
-    with: { master: true },
-  });
-  if (alias) {
+  const { data: alias } = await supabase
+    .from("ingredient_aliases")
+    .select(`*, master_ingredients (id, canonical_name)`)
+    .eq("alias", normalized)
+    .single();
+
+  if (alias && alias.master_ingredients) {
     return {
       matchType: "alias",
-      masterId: alias.masterId,
-      canonicalName: alias.master.canonicalName,
+      masterId: alias.master_ingredients.id,
+      canonicalName: alias.master_ingredients.canonical_name,
       confidence: 0.95,
       alternatives: [],
     };
   }
 
   // Fuzzy search - get all masters and score
-  const allMasters = await db.query.masterIngredients.findMany();
+  const { data: allMasters } = await supabase
+    .from("master_ingredients")
+    .select("id, canonical_name");
+
+  if (!allMasters) {
+    return { matchType: "unknown", confidence: 0, alternatives: [] };
+  }
+
   const scored = allMasters
     .map((m) => ({
       masterId: m.id,
-      canonicalName: m.canonicalName,
-      score: similarityScore(normalized, m.canonicalName.toLowerCase()),
+      canonicalName: m.canonical_name,
+      score: similarityScore(normalized, m.canonical_name.toLowerCase()),
     }))
     .filter((m) => m.score > 0.5)
     .sort((a, b) => b.score - a.score);
