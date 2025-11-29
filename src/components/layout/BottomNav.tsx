@@ -16,7 +16,7 @@ const tabs = [
 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
     return (
-        <div className="relative z-10">
+        <div className="relative z-0">
             {/* Frosted glass navigation */}
             <nav className="glass border-t border-clay/10 pb-safe-bottom">
                 <div className="flex justify-around items-center h-16 px-4">

@@ -4,12 +4,17 @@ import { inventoryTools } from "./tools/definitions";
 // Lazy-load OpenRouter client to avoid build-time initialization
 let _llm: ReturnType<typeof ai> | null = null;
 function getLlm() {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    throw new Error("OPENROUTER_API_KEY environment variable is not set");
+  }
+
   if (!_llm) {
     _llm = ai({
       name: "openrouter",
-      apiKey: process.env.OPENROUTER_API_KEY!,
+      apiKey,
       config: {
-        model: "x-ai/grok-4-fast",
+        model: "google/gemini-2.0-flash-001",
       },
       referer: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
       title: "Mise Kitchen Assistant",
@@ -337,14 +342,19 @@ export async function* streamChatAgent(
 
     yield { type: "complete", success: true };
   } catch (error) {
+    console.error("Chat agent error:", error);
+
     // Yield any pending events
     while (pendingEvents.length > 0) {
       yield pendingEvents.shift()!;
     }
 
+    const errorMessage = error instanceof Error ? error.message : "An error occurred";
+    console.error("Yielding error to client:", errorMessage);
+
     yield {
       type: "error",
-      message: error instanceof Error ? error.message : "An error occurred",
+      message: errorMessage,
     };
   }
 }
