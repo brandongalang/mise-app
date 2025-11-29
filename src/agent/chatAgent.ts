@@ -14,7 +14,7 @@ function getLlm() {
       name: "openrouter",
       apiKey,
       config: {
-        model: "google/gemini-2.0-flash-001",
+        model: "x-ai/grok-4-fast",
       },
       referer: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
       title: "Mise Kitchen Assistant",
