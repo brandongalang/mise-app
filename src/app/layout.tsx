@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Playfair_Display, Source_Sans_3, Caveat } from "next/font/google";
 import "./globals.css";
+import { SessionProvider } from "@/context/SessionContext";
 
 // Display font - elegant serif for headings
 const playfair = Playfair_Display({
@@ -57,7 +58,9 @@ export default function RootLayout({
       className={`${playfair.variable} ${sourceSans.variable} ${caveat.variable}`}
     >
       <body className="antialiased overflow-hidden">
-        {children}
+        <SessionProvider>
+          {children}
+        </SessionProvider>
       </body>
     </html>
   );
