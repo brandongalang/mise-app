@@ -3,7 +3,8 @@ import { createClient, SupabaseClient, PostgrestError } from '@supabase/supabase
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://ivuxreviroawgxtiuwwr.supabase.co';
 // The anon key is a public key that can be safely exposed
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml2dXhyZXZpcm9hd2d4dGl1d3dyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQzMzk5MzQsImV4cCI6MjA3OTkxNTkzNH0.EYOnyt1tGkoOAX41WVKireg48IQ2qDelR84sG9vMH0Y';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || supabaseAnonKey;
+// Only use anon key on client - service role key should only be used in server-side code
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || supabaseAnonKey;
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -37,6 +38,125 @@ function createApiError(error: PostgrestError): ApiError {
 // ============================================
 
 export const api = {
+  // Households
+  households: {
+    async get() {
+      const { data, error } = await supabase
+        .from('households')
+        .select('*')
+        .single();
+      if (error) throw createApiError(error);
+      return data;
+    },
+
+    async update(updates: { name?: string }) {
+      const { data, error } = await supabase
+        .from('households')
+        .update(updates)
+        .select()
+        .single();
+      if (error) throw createApiError(error);
+      return data;
+    },
+  },
+
+  // Profiles
+  profiles: {
+    // SECURITY: Never expose pin_hash to client - transform to has_pin boolean
+    async findAll() {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, household_id, display_name, avatar_color, is_admin, created_at, pin_hash')
+        .order('created_at', { ascending: true });
+      if (error) throw createApiError(error);
+      // Transform: replace pin_hash with has_pin boolean
+      return (data || []).map(({ pin_hash, ...rest }) => ({
+        ...rest,
+        has_pin: pin_hash !== null,
+      }));
+    },
+
+    async findById(id: string) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, household_id, display_name, avatar_color, is_admin, created_at, pin_hash')
+        .eq('id', id)
+        .single();
+      if (error && error.code !== 'PGRST116') throw createApiError(error);
+      if (!data) return null;
+      // Transform: replace pin_hash with has_pin boolean
+      const { pin_hash, ...rest } = data;
+      return { ...rest, has_pin: pin_hash !== null };
+    },
+
+    async create(profile: {
+      display_name: string;
+      avatar_color: string;
+      is_admin?: boolean;
+    }) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .insert(profile)
+        .select()
+        .single();
+      if (error) throw createApiError(error);
+      return data;
+    },
+
+    async update(id: string, updates: {
+      display_name?: string;
+      avatar_color?: string;
+      is_admin?: boolean;
+    }) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw createApiError(error);
+      return data;
+    },
+
+    async delete(id: string) {
+      const { error } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', id);
+      if (error) throw createApiError(error);
+    },
+
+    async validatePin(profileId: string, pin: string): Promise<{
+      success: boolean;
+      error?: 'unauthorized' | 'locked' | 'invalid';
+      message?: string;
+      locked_until?: string;
+      attempts_remaining?: number;
+    }> {
+      const { data, error } = await supabase
+        .rpc('validate_profile_pin', {
+          p_profile_id: profileId,
+          p_pin: pin,
+        });
+      if (error) throw createApiError(error);
+      // Handle both old (boolean) and new (JSON) response formats for backwards compat
+      if (typeof data === 'boolean') {
+        return { success: data };
+      }
+      return data;
+    },
+
+    async setPin(profileId: string, pin: string | null) {
+      const { data, error } = await supabase
+        .rpc('set_profile_pin', {
+          p_profile_id: profileId,
+          p_pin: pin || '',
+        });
+      if (error) throw createApiError(error);
+      return data === true;
+    },
+  },
+
   // Master Ingredients
   masterIngredients: {
     async findById(id: string) {
