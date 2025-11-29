@@ -1,5 +1,41 @@
-import { pgTable, text, integer, real, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, real, timestamp, uuid, boolean } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
+
+// ==========================================
+// AUTH & TENANCY (New Architecture)
+// ==========================================
+
+export const households = pgTable("households", {
+  id: uuid("id").primaryKey(), // Matches auth.users.id
+  name: text("name").notNull().default("My Household"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const profiles = pgTable("profiles", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  householdId: uuid("household_id").notNull().references(() => households.id, { onDelete: 'cascade' }),
+  displayName: text("display_name").notNull(),
+  avatarColor: text("avatar_color").notNull().default("classic-red"),
+  pinHash: text("pin_hash"), // Null = no PIN
+  isAdmin: boolean("is_admin").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Relations for Auth
+export const householdsRelations = relations(households, ({ many }) => ({
+  profiles: many(profiles),
+}));
+
+export const profilesRelations = relations(profiles, ({ one }) => ({
+  household: one(households, {
+    fields: [profiles.householdId],
+    references: [households.id],
+  }),
+}));
+
+// ==========================================
+// CORE DOMAIN
+// ==========================================
 
 // Reference data - built dynamically by agent
 export const masterIngredients = pgTable("master_ingredients", {
@@ -122,3 +158,5 @@ export type Contents = typeof contents.$inferSelect;
 export type NewContents = typeof contents.$inferInsert;
 export type Transaction = typeof transactions.$inferSelect;
 export type CookedRecipe = typeof cookedRecipes.$inferSelect;
+export type Household = typeof households.$inferSelect;
+export type Profile = typeof profiles.$inferSelect;

@@ -13,6 +13,7 @@
     "@ax-llm/ax": "^15.0.4",
     "@fontsource/dm-sans": "^5.2.8",
     "@fontsource/fraunces": "^5.2.9",
+    "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.86.0",
     "ai": "^5.0.104",
     "clsx": "^2.1.1",

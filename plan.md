@@ -186,25 +186,25 @@ Use bold, vibrant gradients for avatars to contrast against a clean background.
 ## 5. Execution Steps
 
 1.  **Migration Script (SQL)**
-    *   [ ] Write `0001_household_migration.sql`.
-    *   [ ] Define `households` and `profiles`.
-    *   [ ] Alter existing tables (Add `household_id`).
-    *   [ ] Create RLS Policies.
-    *   [ ] Create Auth Trigger.
+    *   [x] Write `0001_household_migration.sql`. (Created as `supabase/migrations/20250218120000_household_logic.sql`)
+    *   [x] Define `households` and `profiles`.
+    *   [x] Alter existing tables (Add `household_id`).
+    *   [x] Create RLS Policies.
+    *   [x] Create Auth Trigger.
 
 2.  **Schema Update (Code)**
-    *   [ ] Update `src/db/schema.ts` with new tables and relations.
-    *   [ ] Run `drizzle-kit push` or migration.
+    *   [x] Update `src/db/schema.ts` with new tables and relations. (Note: Partial update - did not modify existing table schemas to avoid breaking current build).
+    *   [ ] Run `drizzle-kit push` or migration. (To be done by future agent).
 
 3.  **Authentication & Context**
-    *   [ ] Implement `SessionProvider`.
-    *   [ ] Wrap root layout.
+    *   [x] Implement `SessionProvider`.
+    *   [x] Wrap root layout.
 
 4.  **UI Construction (The Fun Part)**
-    *   [ ] **Install:** Ensure `framer-motion` is available.
-    *   [ ] **Login Page:** Build `/login` (Clean, simple).
-    *   [ ] **Profile Page:** Build `/profiles` with the *exact* Framer Motion specs above.
-    *   [ ] **Pin Component:** Build `<PinPad />` with the "Shake" and "Dot Fill" logic.
+    *   [x] **Install:** Ensure `framer-motion` is available.
+    *   [x] **Login Page:** Build `/login` (Clean, simple).
+    *   [x] **Profile Page:** Build `/profiles` with the *exact* Framer Motion specs above.
+    *   [x] **Pin Component:** Build `<PinPad />` with the "Shake" and "Dot Fill" logic.
     *   [ ] **Header:** Update `MainLayout` with the Profile Switcher.
 
 5.  **Agent Logic**
