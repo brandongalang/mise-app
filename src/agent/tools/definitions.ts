@@ -10,6 +10,8 @@ import {
   getExpiringItems,
   resolveIngredient,
 } from "./inventory";
+// parseImage is still available if needed, but not used in tool calls
+// since the multimodal agent handles images directly
 import { parseImage } from "../signatures/parseImage";
 import { generateRecipe } from "../signatures/generateRecipe";
 import type { IngredientCategory, ContainerStatus } from "@/lib/types";
@@ -441,6 +443,8 @@ export const inventoryTools: AxFunction[] = [
   mergeInventoryTool,
   getExpiringItemsTool,
   resolveIngredientTool,
-  parseImageTool,
   generateRecipeTool,
 ];
+
+// Note: parseImageTool is exported but not included in inventoryTools
+// because image analysis is now done directly by the multimodal agent

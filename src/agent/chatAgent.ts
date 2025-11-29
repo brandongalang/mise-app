@@ -23,11 +23,36 @@ const SYSTEM_PROMPT = `You are Mise, a helpful kitchen assistant. Your role is t
 - Help users manage their kitchen inventory using the available tools
 - Suggest recipes based on available ingredients
 - Provide cooking tips and techniques
-- Analyze food from images (receipts, fridge contents, etc.)
+- Analyze food from images (you can see images directly!)
 - Track expiry dates and food safety
 
 REASONING APPROACH:
 Think step-by-step before acting. Consider what the user needs, what information you have, and which tools will help. If unsure, gather information first.
+
+IMAGE ANALYSIS (You are multimodal - you can see images directly!):
+When the user shares an image, analyze it and determine what action they likely want:
+
+1. RECEIPT PHOTO: Extract food items, ask user to confirm, then add to inventory
+   - Parse quantities like "24CT" (24 count), "1.5LB" (1.5 lb)
+   - Skip non-food items (bags, tax, totals)
+   - List what you found and ask "Would you like me to add these to your inventory?"
+
+2. GROCERIES/FRIDGE PHOTO: Identify visible food items, ask to add to inventory
+   - Estimate quantities based on what you see
+   - Categorize items (produce, protein, dairy, etc.)
+   - Ask before adding to inventory
+
+3. MEAL/RESTAURANT PHOTO: This is likely NOT for inventory tracking!
+   - Compliment the meal, ask what they'd like to do
+   - Offer options: "Would you like me to suggest a similar recipe?" or "Is this a leftover you want to track?"
+   - If they confirm it's leftovers, use addLeftover with portion estimates
+   - If they want a recipe, offer to help them recreate it using their inventory
+
+4. COOKED DISH/LEFTOVERS: Ask if they want to track it
+   - Use addLeftover (not addInventory) for prepared dishes
+   - Ask about portion count and when it should be eaten by
+
+Always describe what you see in the image briefly, then ask what the user wants to do with it.
 
 READ BEFORE WRITE (Critical):
 ALWAYS search or check inventory BEFORE any add/update/deduct action to avoid duplicates:
@@ -39,7 +64,6 @@ ALWAYS search or check inventory BEFORE any add/update/deduct action to avoid du
 TOOL WORKFLOWS:
 - Adding groceries: searchInventory (check existing) then addInventory (only new items) or updateInventory (increase existing)
 - Using ingredients: searchInventory (verify exists) then deductInventory
-- Image processing: parseImage then review items with user then searchInventory (check each) then addInventory (confirmed new items only)
 - Recipe suggestions: getExpiringItems + searchInventory then generateRecipe
 - Leftovers: addLeftover (these are unique dishes, no duplicate check needed)
 
@@ -55,7 +79,7 @@ ERROR HANDLING:
 CONFIRMATIONS:
 - Confirm before bulk additions (more than 5 items)
 - Confirm before deleting items
-- After image parsing, list extracted items for user approval before adding
+- After analyzing images, list what you found and ask for user approval before adding
 
 Be friendly, practical, and focused on helping them use their ingredients effectively.
 Use markdown formatting for better readability when appropriate (lists, bold, headers).`;
@@ -89,18 +113,6 @@ export async function runChatAgent(input: ChatAgentInput): Promise<ChatAgentResu
   const toolEvents: ToolEvent[] = [];
   let toolCounter = 0;
 
-  // Build conversation context from history
-  const conversationContext = input.conversationHistory
-    ?.map((msg) => `${msg.role}: ${msg.content}`)
-    .join("\n")
-    .slice(-2000); // Keep last ~2000 chars for context
-
-  // If there's an image, we need to handle it specially
-  // For now, we'll describe that an image was attached
-  const messageWithImage = input.imageBase64
-    ? `${input.message || "Please analyze this image"}\n\n[User attached an image]`
-    : input.message;
-
   // Wrap the tools to capture events
   const wrappedTools = inventoryTools.map((tool) => ({
     ...tool,
@@ -116,16 +128,7 @@ export async function runChatAgent(input: ChatAgentInput): Promise<ChatAgentResu
       });
 
       try {
-        // If this is parseImage and we have an image, inject it
-        let actualArgs = args;
-        if (tool.name === "parseImage" && input.imageBase64) {
-          actualArgs = {
-            ...args,
-            imageBase64: input.imageBase64,
-          };
-        }
-
-        const result = await tool.func(actualArgs, extra);
+        const result = await tool.func(args, extra);
 
         // Emit tool_end
         toolEvents.push({
@@ -150,7 +153,8 @@ export async function runChatAgent(input: ChatAgentInput): Promise<ChatAgentResu
   }));
 
   // Build chat messages for direct llm.chat() call
-  const chatPrompt: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const chatPrompt: any[] = [
     { role: "system", content: SYSTEM_PROMPT },
   ];
 
@@ -161,8 +165,25 @@ export async function runChatAgent(input: ChatAgentInput): Promise<ChatAgentResu
     }
   }
 
-  // Add current user message
-  chatPrompt.push({ role: "user", content: messageWithImage });
+  // Add current user message - with image if present (multimodal)
+  const userMessage = input.message || "What's in this image?";
+
+  if (input.imageBase64) {
+    // Build multimodal content with image
+    const imageData = input.imageBase64.startsWith("data:")
+      ? input.imageBase64
+      : `data:${input.imageMimeType || "image/jpeg"};base64,${input.imageBase64}`;
+
+    chatPrompt.push({
+      role: "user",
+      content: [
+        { type: "text", text: userMessage },
+        { type: "image", image: imageData, mimeType: input.imageMimeType || "image/jpeg" },
+      ],
+    });
+  } else {
+    chatPrompt.push({ role: "user", content: userMessage });
+  }
 
   // Use direct llm.chat() - bypasses signature parsing
   const llm = getLlm();
@@ -201,56 +222,7 @@ export async function* streamChatAgent(
   let toolCounter = 0;
   let tokenIndex = 0;
 
-  yield { type: "thinking", status: input.imageBase64 ? "Analyzing your image..." : "Thinking..." };
-
-  // Build conversation context
-  const conversationContext = input.conversationHistory
-    ?.map((msg) => `${msg.role}: ${msg.content}`)
-    .join("\n")
-    .slice(-2000);
-
-  // If there's an image, process it automatically first
-  let imageAnalysisContext = "";
-  if (input.imageBase64) {
-    const toolId = `tool_${++toolCounter}_${Date.now()}`;
-
-    yield {
-      type: "tool_start",
-      id: toolId,
-      name: "parseImage",
-      args: { sourceHint: "auto" },
-    };
-
-    try {
-      const { parseImage } = await import("./signatures/parseImage");
-      const result = await parseImage(input.imageBase64);
-
-      yield {
-        type: "tool_end",
-        id: toolId,
-        name: "parseImage",
-        result,
-      };
-
-      // Build context from parsed image
-      const itemsList = result.items.map((item: any) =>
-        `- ${item.name}: ${item.quantity} ${item.unit} (${item.confidence} confidence)`
-      ).join("\n");
-
-      imageAnalysisContext = `\n\n[Image Analysis Result - ${result.sourceType}]\nItems found:\n${itemsList}${result.notes ? `\nNotes: ${result.notes}` : ""}`;
-    } catch (error) {
-      yield {
-        type: "tool_end",
-        id: toolId,
-        name: "parseImage",
-        error: error instanceof Error ? error.message : "Failed to analyze image",
-      };
-    }
-  }
-
-  const messageWithContext = input.imageBase64
-    ? `${input.message || "Please analyze this image"}${imageAnalysisContext}\n\nBased on the image analysis above, help the user with their request. If they want to add items to inventory, use addInventory with the parsed items.`
-    : input.message;
+  yield { type: "thinking", status: input.imageBase64 ? "Looking at your image..." : "Thinking..." };
 
   // Store tool events for yielding
   const pendingEvents: Array<
@@ -272,12 +244,7 @@ export async function* streamChatAgent(
       });
 
       try {
-        let actualArgs = args;
-        if (tool.name === "parseImage" && input.imageBase64) {
-          actualArgs = { ...args, imageBase64: input.imageBase64 };
-        }
-
-        const result = await tool.func(actualArgs, extra);
+        const result = await tool.func(args, extra);
 
         pendingEvents.push({
           type: "tool_end",
@@ -301,7 +268,8 @@ export async function* streamChatAgent(
 
   try {
     // Build chat messages for direct llm.chat() call
-    const chatPrompt: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const chatPrompt: any[] = [
       { role: "system", content: SYSTEM_PROMPT },
     ];
 
@@ -312,8 +280,25 @@ export async function* streamChatAgent(
       }
     }
 
-    // Add current user message
-    chatPrompt.push({ role: "user", content: messageWithContext });
+    // Add current user message - with image if present (multimodal)
+    const userMessage = input.message || "What's in this image?";
+
+    if (input.imageBase64) {
+      // Build multimodal content with image
+      const imageData = input.imageBase64.startsWith("data:")
+        ? input.imageBase64
+        : `data:${input.imageMimeType || "image/jpeg"};base64,${input.imageBase64}`;
+
+      chatPrompt.push({
+        role: "user",
+        content: [
+          { type: "text", text: userMessage },
+          { type: "image", image: imageData, mimeType: input.imageMimeType || "image/jpeg" },
+        ],
+      });
+    } else {
+      chatPrompt.push({ role: "user", content: userMessage });
+    }
 
     // Use direct llm.chat() - bypasses signature parsing
     const llm = getLlm();
