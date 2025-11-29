@@ -178,7 +178,7 @@ export async function runChatAgent(input: ChatAgentInput): Promise<ChatAgentResu
       role: "user",
       content: [
         { type: "text", text: userMessage },
-        { type: "image", image: imageData, mimeType: input.imageMimeType || "image/jpeg" },
+        { type: "image_url", image_url: { url: imageData } },
       ],
     });
   } else {
@@ -293,7 +293,7 @@ export async function* streamChatAgent(
         role: "user",
         content: [
           { type: "text", text: userMessage },
-          { type: "image", image: imageData, mimeType: input.imageMimeType || "image/jpeg" },
+          { type: "image_url", image_url: { url: imageData } },
         ],
       });
     } else {
