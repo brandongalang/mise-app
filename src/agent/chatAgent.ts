@@ -18,7 +18,7 @@ function getLlm() {
   return _llm;
 }
 
-// System instructions embedded in the signature
+// System instructions (set via setInstruction to avoid signature parsing issues)
 const SYSTEM_PROMPT = `You are Mise, a helpful kitchen assistant. Your role is to:
 - Help users manage their kitchen inventory using the available tools
 - Suggest recipes based on available ingredients
@@ -37,38 +37,35 @@ ALWAYS search or check inventory BEFORE any add/update/deduct action to avoid du
 - If an item already exists, ask user if they want to add more to existing stock or update quantity
 
 TOOL WORKFLOWS:
-- Adding groceries: searchInventory (check existing) → addInventory (only new items) or updateInventory (increase existing)
-- Using ingredients: searchInventory (verify exists) → deductInventory
-- Image processing: parseImage → review items with user → searchInventory (check each) → addInventory (confirmed new items only)
-- Recipe suggestions: getExpiringItems + searchInventory → generateRecipe
+- Adding groceries: searchInventory (check existing) then addInventory (only new items) or updateInventory (increase existing)
+- Using ingredients: searchInventory (verify exists) then deductInventory
+- Image processing: parseImage then review items with user then searchInventory (check each) then addInventory (confirmed new items only)
+- Recipe suggestions: getExpiringItems + searchInventory then generateRecipe
 - Leftovers: addLeftover (these are unique dishes, no duplicate check needed)
 
 QUANTITY INTERPRETATION:
-- "a couple" = 2, "a few" = 3, "some" = estimate 4-5
-- Parse units: "2 lbs" = 2 lb, "dozen" = 12 count
+- a couple means 2, a few means 3, some means estimate 4-5
+- Parse units: 2 lbs means 2 lb, dozen means 12 count
 - When unclear, ask for clarification
 
 ERROR HANDLING:
-- If a tool returns an error or "not found", explain clearly and suggest alternatives
-- If deduct fails due to insufficient quantity, show what's available
+- If a tool returns an error or not found, explain clearly and suggest alternatives
+- If deduct fails due to insufficient quantity, show what is available
 
 CONFIRMATIONS:
-- Confirm before bulk additions (>5 items)
+- Confirm before bulk additions (more than 5 items)
 - Confirm before deleting items
 - After image parsing, list extracted items for user approval before adding
 
 Be friendly, practical, and focused on helping them use their ingredients effectively.
 Use markdown formatting for better readability when appropriate (lists, bold, headers).`;
 
-// Define the chat signature with functions
+// Define the chat signature with functions - use simple signature, set instruction separately
 const chatSignature = ax(
-  `"${SYSTEM_PROMPT}"
-  userMessage:string "The user's message or question",
-  conversationContext?:string "Previous conversation context for continuity",
-  hasImage?:boolean "Whether the user attached an image" ->
-  response:string "Your helpful response to the user"`,
+  `userMessage:string, conversationContext?:string, hasImage?:boolean -> response:string`,
   { functions: inventoryTools }
 );
+chatSignature.setInstruction(SYSTEM_PROMPT);
 
 export interface ChatAgentInput {
   message: string;
@@ -161,13 +158,10 @@ export async function runChatAgent(input: ChatAgentInput): Promise<ChatAgentResu
 
   // Create signature with wrapped tools
   const wrappedSignature = ax(
-    `"${SYSTEM_PROMPT}"
-    userMessage:string "The user's message or question",
-    conversationContext?:string "Previous conversation context for continuity",
-    hasImage?:boolean "Whether the user attached an image" ->
-    response:string "Your helpful response to the user"`,
+    `userMessage:string, conversationContext?:string, hasImage?:boolean -> response:string`,
     { functions: wrappedTools }
   );
+  wrappedSignature.setInstruction(SYSTEM_PROMPT);
 
   // Run the agent
   const result = await wrappedSignature.forward(getLlm(), {
@@ -260,13 +254,10 @@ export async function* streamChatAgent(
 
   try {
     const wrappedSignature = ax(
-      `"${SYSTEM_PROMPT}"
-      userMessage:string "The user's message or question",
-      conversationContext?:string "Previous conversation context for continuity",
-      hasImage?:boolean "Whether the user attached an image" ->
-      response:string "Your helpful response to the user"`,
+      `userMessage:string, conversationContext?:string, hasImage?:boolean -> response:string`,
       { functions: wrappedTools }
     );
+    wrappedSignature.setInstruction(SYSTEM_PROMPT);
 
     // Use streaming mode
     const stream = wrappedSignature.streamingForward(getLlm(), {
