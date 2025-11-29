@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import type { ToolCall as ToolCallType } from '@/lib/types';
@@ -17,10 +18,12 @@ import {
     Eye,
     Merge,
     FileText,
+    ChevronDown,
+    ChevronRight,
 } from 'lucide-react';
 
 // Map tool names to icons and labels
-const toolConfig: Record<string, { icon: typeof Search; label: string; color: string }> = {
+const TOOL_CONFIG: Record<string, { icon: typeof Search; label: string; color: string }> = {
     searchInventory: { icon: Search, label: 'Searching inventory', color: 'text-olive' },
     addInventory: { icon: Plus, label: 'Adding to inventory', color: 'text-sage' },
     deductInventory: { icon: Minus, label: 'Deducting from inventory', color: 'text-marigold' },
@@ -33,6 +36,24 @@ const toolConfig: Record<string, { icon: typeof Search; label: string; color: st
     generateRecipe: { icon: ChefHat, label: 'Generating recipe', color: 'text-terracotta' },
 };
 
+const DEFAULT_TOOL_CONFIG = {
+    icon: RefreshCw,
+    label: 'Processing',
+    color: 'text-latte',
+};
+
+// Helper to safely format tool result for display
+function formatResult(result: unknown): string {
+    if (result === null) return 'null';
+    if (result === undefined) return 'undefined';
+    if (typeof result === 'string') return result;
+    try {
+        return JSON.stringify(result, null, 2);
+    } catch {
+        return String(result);
+    }
+}
+
 interface ToolCallProps {
     tool: ToolCallType;
     isExpanded?: boolean;
@@ -40,11 +61,7 @@ interface ToolCallProps {
 }
 
 export function ToolCall({ tool, isExpanded = false, onToggle }: ToolCallProps) {
-    const config = toolConfig[tool.name] || {
-        icon: RefreshCw,
-        label: tool.name,
-        color: 'text-latte',
-    };
+    const config = TOOL_CONFIG[tool.name] || { ...DEFAULT_TOOL_CONFIG, label: tool.name };
     const Icon = config.icon;
 
     const StatusIcon = {
@@ -62,6 +79,7 @@ export function ToolCall({ tool, isExpanded = false, onToggle }: ToolCallProps) 
     }[tool.status];
 
     const isActive = tool.status === 'pending' || tool.status === 'running';
+    const hasDetails = (tool.args && Object.keys(tool.args).length > 0) || tool.result !== undefined;
 
     return (
         <motion.div
@@ -79,11 +97,28 @@ export function ToolCall({ tool, isExpanded = false, onToggle }: ToolCallProps) 
             {/* Header */}
             <button
                 onClick={onToggle}
-                className="w-full flex items-center gap-3 px-3 py-2.5 text-left"
+                disabled={!hasDetails}
+                className={cn(
+                    "w-full flex items-center gap-3 px-3 py-2.5 text-left",
+                    hasDetails && "cursor-pointer hover:bg-parchment/30",
+                    !hasDetails && "cursor-default"
+                )}
+                aria-expanded={isExpanded}
             >
+                {/* Expand indicator */}
+                {hasDetails && (
+                    <div className="w-4 flex-shrink-0">
+                        {isExpanded ? (
+                            <ChevronDown size={14} className="text-latte" />
+                        ) : (
+                            <ChevronRight size={14} className="text-latte" />
+                        )}
+                    </div>
+                )}
+
                 {/* Tool Icon */}
                 <div className={cn(
-                    "w-8 h-8 rounded-lg flex items-center justify-center",
+                    "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
                     isActive ? "bg-terracotta/10" : "bg-parchment"
                 )}>
                     <Icon size={16} className={config.color} />
@@ -113,11 +148,12 @@ export function ToolCall({ tool, isExpanded = false, onToggle }: ToolCallProps) 
 
             {/* Expanded Details */}
             <AnimatePresence>
-                {isExpanded && (tool.args || tool.result !== undefined) && (
+                {isExpanded && hasDetails && (
                     <motion.div
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
                         className="border-t border-clay/10"
                     >
                         <div className="px-3 py-2.5 space-y-2">
@@ -125,7 +161,7 @@ export function ToolCall({ tool, isExpanded = false, onToggle }: ToolCallProps) 
                             {tool.args && Object.keys(tool.args).length > 0 && (
                                 <div>
                                     <p className="text-xs font-medium text-latte mb-1">Input</p>
-                                    <pre className="text-xs text-espresso bg-parchment/50 p-2 rounded-lg overflow-x-auto">
+                                    <pre className="text-xs text-espresso bg-parchment/50 p-2 rounded-lg overflow-x-auto max-h-24 whitespace-pre-wrap break-words">
                                         {JSON.stringify(tool.args, null, 2)}
                                     </pre>
                                 </div>
@@ -135,10 +171,8 @@ export function ToolCall({ tool, isExpanded = false, onToggle }: ToolCallProps) 
                             {tool.result !== undefined && (
                                 <div>
                                     <p className="text-xs font-medium text-latte mb-1">Result</p>
-                                    <pre className="text-xs text-espresso bg-parchment/50 p-2 rounded-lg overflow-x-auto max-h-32">
-                                        {typeof tool.result === 'string'
-                                            ? tool.result
-                                            : JSON.stringify(tool.result, null, 2) as string}
+                                    <pre className="text-xs text-espresso bg-parchment/50 p-2 rounded-lg overflow-x-auto max-h-32 whitespace-pre-wrap break-words">
+                                        {formatResult(tool.result)}
                                     </pre>
                                 </div>
                             )}
@@ -157,7 +191,7 @@ export function ToolCall({ tool, isExpanded = false, onToggle }: ToolCallProps) 
     );
 }
 
-// Format args for display
+// Format args for display in collapsed view
 function formatArgs(args: Record<string, unknown>): string {
     const entries = Object.entries(args);
     if (entries.length === 0) return '';
@@ -169,60 +203,136 @@ function formatArgs(args: Record<string, unknown>): string {
 }
 
 function formatValue(value: unknown): string {
+    if (value === null || value === undefined) return 'null';
     if (typeof value === 'string') return value.length > 20 ? value.slice(0, 20) + '...' : value;
     if (typeof value === 'number') return value.toString();
+    if (typeof value === 'boolean') return value.toString();
     if (Array.isArray(value)) return `[${value.length} items]`;
-    if (typeof value === 'object' && value !== null) return '{...}';
+    if (typeof value === 'object') return '{...}';
     return String(value);
 }
 
-// Tool calls container for multiple tools
+// Tool calls container with expandable state management
 interface ToolCallsContainerProps {
     tools: ToolCallType[];
     className?: string;
+    defaultExpanded?: boolean;
 }
 
-export function ToolCallsContainer({ tools, className }: ToolCallsContainerProps) {
-    if (tools.length === 0) return null;
+export function ToolCallsContainer({ tools, className, defaultExpanded = false }: ToolCallsContainerProps) {
+    // Track which tools are expanded
+    const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
-    const activeTools = tools.filter(t => t.status === 'pending' || t.status === 'running');
-    const completedTools = tools.filter(t => t.status === 'completed' || t.status === 'error');
+    const toggleExpand = useCallback((toolId: string) => {
+        setExpandedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(toolId)) {
+                next.delete(toolId);
+            } else {
+                next.add(toolId);
+            }
+            return next;
+        });
+    }, []);
+
+    // Categorize tools
+    const { activeTools, completedTools } = useMemo(() => ({
+        activeTools: tools.filter(t => t.status === 'pending' || t.status === 'running'),
+        completedTools: tools.filter(t => t.status === 'completed' || t.status === 'error'),
+    }), [tools]);
+
+    if (tools.length === 0) return null;
 
     return (
         <div className={cn("space-y-2", className)}>
-            {/* Active tools */}
+            {/* Active tools - always show expanded */}
             {activeTools.map(tool => (
-                <ToolCall key={tool.id} tool={tool} />
+                <ToolCall
+                    key={tool.id}
+                    tool={tool}
+                    isExpanded={expandedIds.has(tool.id) || defaultExpanded}
+                    onToggle={() => toggleExpand(tool.id)}
+                />
             ))}
 
-            {/* Completed tools - collapsed summary */}
+            {/* Completed tools */}
             {completedTools.length > 0 && activeTools.length === 0 && (
-                <CollapsedToolsSummary tools={completedTools} />
+                completedTools.length === 1 ? (
+                    // Single completed tool - show it directly
+                    <ToolCall
+                        key={completedTools[0].id}
+                        tool={completedTools[0]}
+                        isExpanded={expandedIds.has(completedTools[0].id)}
+                        onToggle={() => toggleExpand(completedTools[0].id)}
+                    />
+                ) : (
+                    // Multiple completed tools - show summary with expand option
+                    <CollapsedToolsSummary
+                        tools={completedTools}
+                        expandedIds={expandedIds}
+                        onToggle={toggleExpand}
+                    />
+                )
             )}
         </div>
     );
 }
 
-// Collapsed summary of completed tools
-function CollapsedToolsSummary({ tools }: { tools: ToolCallType[] }) {
+// Collapsed summary of completed tools with expand functionality
+interface CollapsedToolsSummaryProps {
+    tools: ToolCallType[];
+    expandedIds: Set<string>;
+    onToggle: (id: string) => void;
+}
+
+function CollapsedToolsSummary({ tools, expandedIds, onToggle }: CollapsedToolsSummaryProps) {
+    const [isExpanded, setIsExpanded] = useState(false);
     const successCount = tools.filter(t => t.status === 'completed').length;
     const errorCount = tools.filter(t => t.status === 'error').length;
 
     return (
-        <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex items-center gap-2 px-3 py-2 bg-parchment/30 rounded-lg text-xs text-latte"
-        >
-            <CheckCircle2 size={14} className="text-sage" />
-            <span>
-                {successCount} tool{successCount !== 1 ? 's' : ''} completed
-                {errorCount > 0 && (
-                    <span className="text-cayenne ml-1">
-                        ({errorCount} failed)
-                    </span>
+        <div className="space-y-2">
+            <motion.button
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="w-full flex items-center gap-2 px-3 py-2 bg-parchment/30 rounded-lg text-xs text-latte hover:bg-parchment/50 transition-colors"
+            >
+                {isExpanded ? (
+                    <ChevronDown size={14} />
+                ) : (
+                    <ChevronRight size={14} />
                 )}
-            </span>
-        </motion.div>
+                <CheckCircle2 size={14} className="text-sage" />
+                <span className="flex-1 text-left">
+                    {successCount} tool{successCount !== 1 ? 's' : ''} completed
+                    {errorCount > 0 && (
+                        <span className="text-cayenne ml-1">
+                            ({errorCount} failed)
+                        </span>
+                    )}
+                </span>
+            </motion.button>
+
+            <AnimatePresence>
+                {isExpanded && (
+                    <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="space-y-2 pl-4"
+                    >
+                        {tools.map(tool => (
+                            <ToolCall
+                                key={tool.id}
+                                tool={tool}
+                                isExpanded={expandedIds.has(tool.id)}
+                                onToggle={() => onToggle(tool.id)}
+                            />
+                        ))}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
     );
 }

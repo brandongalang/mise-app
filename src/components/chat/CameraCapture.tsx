@@ -14,24 +14,45 @@ interface CameraCaptureProps {
 export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const [stream, setStream] = useState<MediaStream | null>(null);
+    const streamRef = useRef<MediaStream | null>(null);
     const [capturedImage, setCapturedImage] = useState<string | null>(null);
     const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isSupported, setIsSupported] = useState(true);
+
+    // Check if camera API is supported
+    useEffect(() => {
+        const supported = typeof navigator !== 'undefined' &&
+            'mediaDevices' in navigator &&
+            'getUserMedia' in navigator.mediaDevices;
+        setIsSupported(supported);
+        if (!supported) {
+            setError('Camera is not supported on this device or browser.');
+            setIsLoading(false);
+        }
+    }, []);
+
+    // Cleanup stream helper
+    const stopStream = useCallback(() => {
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+        }
+    }, []);
 
     // Start camera stream
     const startCamera = useCallback(async () => {
+        if (!isSupported) return;
+
         setIsLoading(true);
         setError(null);
         setCapturedImage(null);
 
-        try {
-            // Stop existing stream
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
+        // Stop any existing stream first
+        stopStream();
 
+        try {
             const mediaStream = await navigator.mediaDevices.getUserMedia({
                 video: {
                     facingMode: facingMode,
@@ -41,7 +62,7 @@ export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps
                 audio: false,
             });
 
-            setStream(mediaStream);
+            streamRef.current = mediaStream;
 
             if (videoRef.current) {
                 videoRef.current.srcObject = mediaStream;
@@ -50,12 +71,21 @@ export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps
         } catch (err) {
             console.error('Camera error:', err);
             if (err instanceof DOMException) {
-                if (err.name === 'NotAllowedError') {
-                    setError('Camera access denied. Please allow camera permissions.');
-                } else if (err.name === 'NotFoundError') {
-                    setError('No camera found on this device.');
-                } else {
-                    setError('Could not access camera. Please try again.');
+                switch (err.name) {
+                    case 'NotAllowedError':
+                        setError('Camera access denied. Please allow camera permissions.');
+                        break;
+                    case 'NotFoundError':
+                        setError('No camera found on this device.');
+                        break;
+                    case 'OverconstrainedError':
+                        setError('Camera does not support requested settings.');
+                        break;
+                    case 'NotReadableError':
+                        setError('Camera is in use by another application.');
+                        break;
+                    default:
+                        setError('Could not access camera. Please try again.');
                 }
             } else {
                 setError('Could not access camera.');
@@ -63,40 +93,39 @@ export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps
         } finally {
             setIsLoading(false);
         }
-    }, [facingMode, stream]);
+    }, [facingMode, isSupported, stopStream]);
 
     // Initialize camera when opened
     useEffect(() => {
-        if (isOpen) {
+        if (isOpen && isSupported) {
             startCamera();
-        } else {
-            // Cleanup when closed
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-                setStream(null);
-            }
-            setCapturedImage(null);
-            setError(null);
         }
 
         return () => {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
+            // Cleanup on unmount or when closing
+            stopStream();
         };
-    }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [isOpen, isSupported, startCamera, stopStream]);
+
+    // Handle close - cleanup and reset state
+    const handleClose = useCallback(() => {
+        stopStream();
+        setCapturedImage(null);
+        setError(null);
+        onClose();
+    }, [onClose, stopStream]);
 
     // Switch camera
     const switchCamera = useCallback(() => {
         setFacingMode(prev => prev === 'user' ? 'environment' : 'user');
     }, []);
 
-    // Restart camera when facing mode changes
+    // Restart camera when facing mode changes (only when open and no capture)
     useEffect(() => {
-        if (isOpen && !capturedImage) {
+        if (isOpen && !capturedImage && isSupported) {
             startCamera();
         }
-    }, [facingMode]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [facingMode]); // eslint-disable-line react-hooks/exhaustive-deps -- intentionally only re-run on facingMode change
 
     // Capture photo
     const capturePhoto = useCallback(() => {
@@ -119,11 +148,9 @@ export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps
         const imageData = canvas.toDataURL('image/jpeg', 0.8);
         setCapturedImage(imageData);
 
-        // Stop the video stream
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-        }
-    }, [stream]);
+        // Stop the video stream to save resources
+        stopStream();
+    }, [stopStream]);
 
     // Retake photo
     const retakePhoto = useCallback(() => {
@@ -135,9 +162,9 @@ export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps
     const confirmPhoto = useCallback(() => {
         if (capturedImage) {
             onCapture(capturedImage, 'image/jpeg');
-            onClose();
+            handleClose();
         }
-    }, [capturedImage, onCapture, onClose]);
+    }, [capturedImage, onCapture, handleClose]);
 
     if (!isOpen) return null;
 
@@ -152,16 +179,18 @@ export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps
                 {/* Header */}
                 <div className="flex items-center justify-between p-4">
                     <button
-                        onClick={onClose}
+                        onClick={handleClose}
                         className="p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+                        aria-label="Close camera"
                     >
                         <X size={24} />
                     </button>
                     <h2 className="text-white font-semibold">Take Photo</h2>
                     <button
                         onClick={switchCamera}
-                        className="p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
-                        disabled={!!capturedImage}
+                        className="p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors disabled:opacity-50"
+                        disabled={!!capturedImage || !isSupported}
+                        aria-label="Switch camera"
                     >
                         <SwitchCamera size={24} />
                     </button>
@@ -176,12 +205,14 @@ export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps
                                     <Camera className="w-8 h-8 text-cayenne" />
                                 </div>
                                 <p className="text-white/80 mb-4">{error}</p>
-                                <button
-                                    onClick={startCamera}
-                                    className="px-4 py-2 bg-terracotta text-white rounded-full hover:bg-terracotta-dark transition-colors"
-                                >
-                                    Try Again
-                                </button>
+                                {isSupported && (
+                                    <button
+                                        onClick={startCamera}
+                                        className="px-4 py-2 bg-terracotta text-white rounded-full hover:bg-terracotta-dark transition-colors"
+                                    >
+                                        Try Again
+                                    </button>
+                                )}
                             </div>
                         </div>
                     ) : isLoading ? (
@@ -229,6 +260,7 @@ export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps
                                 animate={{ scale: 1 }}
                                 onClick={retakePhoto}
                                 className="p-4 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+                                aria-label="Retake photo"
                             >
                                 <RotateCcw size={28} />
                             </motion.button>
@@ -238,6 +270,7 @@ export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps
                                 transition={{ delay: 0.1 }}
                                 onClick={confirmPhoto}
                                 className="p-5 rounded-full bg-sage text-white hover:bg-sage/90 transition-colors shadow-lg"
+                                aria-label="Use this photo"
                             >
                                 <Check size={32} />
                             </motion.button>
@@ -246,15 +279,16 @@ export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps
                         <div className="flex items-center justify-center">
                             <motion.button
                                 onClick={capturePhoto}
-                                disabled={isLoading || !!error}
+                                disabled={isLoading || !!error || !isSupported}
                                 className={cn(
                                     "w-20 h-20 rounded-full border-4 border-white flex items-center justify-center",
                                     "transition-all duration-200",
-                                    isLoading || error
+                                    isLoading || error || !isSupported
                                         ? "opacity-50"
                                         : "hover:scale-105 active:scale-95"
                                 )}
                                 whileTap={{ scale: 0.9 }}
+                                aria-label="Take photo"
                             >
                                 <div className="w-16 h-16 rounded-full bg-white" />
                             </motion.button>
