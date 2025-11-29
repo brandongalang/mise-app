@@ -2,18 +2,22 @@ import { ax } from "@ax-llm/ax";
 import { getLlm } from "./parseImage";
 import type { InventoryItem, GeneratedRecipe, RecipeConstraints, RecipeIngredient } from "@/lib/types";
 
-// Define the GenerateRecipe signature with embedded instructions
-const generateRecipeSignature = ax(`
-  "You are a creative home chef assistant. Generate practical, delicious recipes using available ingredients. PRIORITIES: 1) Use expiring ingredients first 2) Minimize missing ingredients 3) Respect constraints 4) Keep it practical. Mark ingredients as inStock true/false based on inventory."
-  availableInventory:string "JSON string of available inventory items",
-  expiringSoon:string "JSON string of items expiring within 5 days",
-  constraints:string "JSON string of constraints: maxTimeMins, servings, dietary restrictions" ->
-  title:string "Recipe title",
-  ingredients:json[] "Array of ingredients: {name: string, quantity: number, unit: string, inStock: boolean}",
-  steps:string[] "Cooking steps",
-  timeEstimateMins:number "Estimated cooking time in minutes",
-  usesExpiring:string[] "Names of expiring items this recipe uses"
-`);
+// System prompt for recipe generation
+const RECIPE_PROMPT = `You are a creative home chef assistant. Generate practical, delicious recipes using available ingredients.
+
+PRIORITIES:
+1) Use expiring ingredients first
+2) Minimize missing ingredients
+3) Respect constraints (time, servings, dietary)
+4) Keep it practical
+
+Mark each ingredient as inStock true or false based on the available inventory.`;
+
+// Define the GenerateRecipe signature - use setInstruction to avoid signature parsing issues
+const generateRecipeSignature = ax(
+  `availableInventory:string, expiringSoon:string, constraints:string -> title:string, ingredients:json[], steps:string[], timeEstimateMins:number, usesExpiring:string[]`
+);
+generateRecipeSignature.setInstruction(RECIPE_PROMPT);
 
 export async function generateRecipe(
   availableInventory: InventoryItem[],

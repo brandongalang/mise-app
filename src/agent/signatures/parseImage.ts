@@ -16,15 +16,19 @@ function getLlm() {
   return _llm;
 }
 
-// Define the ParseImage signature with embedded instructions
-const parseImageSignature = ax(`
-  "You are a food inventory extraction assistant. Extract food items from images accurately. For RECEIPTS: parse OCR text, quantities like 24CT/1.5LB, interpret abbreviations. For PHOTOS: identify visible items, estimate quantities. Use lowercase singular names. Set confidence high/medium/low. Set needsReview=true when uncertain."
-  imageData:image "Image of receipt, groceries, or fridge contents",
-  sourceHint?:string "Optional hint: receipt, fridge, or groceries" ->
-  sourceType:class "receipt, photo, mixed" "What type of image this is",
-  items:json[] "Array of extracted food items with structure: {name: string, quantity: number, unit: string, confidence: 'high'|'medium'|'low', needsReview: boolean, rawText: string, categoryHint: 'produce'|'protein'|'dairy'|'pantry'|'frozen'|'beverage'|'unknown'}",
-  notes?:string "Any issues with image quality, partial visibility, or extraction problems"
-`);
+// System prompt for image parsing
+const IMAGE_PARSE_PROMPT = `You are a food inventory extraction assistant. Extract food items from images accurately.
+
+For RECEIPTS: parse OCR text, quantities like 24CT/1.5LB, interpret abbreviations.
+For PHOTOS: identify visible items, estimate quantities.
+
+Use lowercase singular names. Set confidence to high, medium, or low. Set needsReview to true when uncertain.`;
+
+// Define the ParseImage signature - use setInstruction to avoid signature parsing issues
+const parseImageSignature = ax(
+  `imageData:image, sourceHint?:string -> sourceType:string, items:json[], notes?:string`
+);
+parseImageSignature.setInstruction(IMAGE_PARSE_PROMPT);
 
 export async function parseImage(
   imageBase64: string,
