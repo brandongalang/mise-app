@@ -138,17 +138,22 @@ function buildUserMessage(
     return text || "What's in this image?";
   }
 
-  // Build data URL if not already one
-  const imageData = imageBase64.startsWith("data:")
-    ? imageBase64
-    : `data:${imageMimeType || "image/jpeg"};base64,${imageBase64}`;
+  // Strip data URL prefix if present - ax-llm adds it automatically
+  // The image field should be raw base64, not a data URL
+  let rawBase64 = imageBase64;
+  if (imageBase64.startsWith("data:")) {
+    const base64Match = imageBase64.match(/^data:[^;]+;base64,(.+)$/);
+    if (base64Match) {
+      rawBase64 = base64Match[1];
+    }
+  }
 
   // Build multimodal content array with text and image
   const content: (TextContent | ImageContent)[] = [
     { type: "text", text: text || "What's in this image?" },
     {
       type: "image",
-      image: imageData,
+      image: rawBase64, // Raw base64 only - ax-llm adds the data URL prefix
       mimeType: imageMimeType || "image/jpeg",
       details: "high", // Use high detail for better food/receipt analysis
     },
