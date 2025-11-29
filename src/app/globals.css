@@ -382,6 +382,46 @@ h3 {
   padding-top: max(1rem, env(safe-area-inset-top));
 }
 
+/* ============================================
+   DYNAMIC VIEWPORT UTILITIES
+   For proper mobile viewport handling
+   ============================================ */
+
+.h-dvh {
+  height: 100vh; /* Fallback for older browsers */
+}
+
+@supports (height: 100dvh) {
+  .h-dvh {
+    height: 100dvh;
+  }
+}
+
+.min-h-dvh {
+  min-height: 100vh;
+}
+
+@supports (min-height: 100dvh) {
+  .min-h-dvh {
+    min-height: 100dvh;
+  }
+}
+
+.modal-fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 100vh;
+}
+
+@supports (height: 100dvh) {
+  .modal-fullscreen {
+    height: 100dvh;
+  }
+}
+
 /* Animation utilities */
 @keyframes fade-in {
   from { opacity: 0; }

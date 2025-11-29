@@ -11,7 +11,7 @@ interface MainLayoutProps {
 
 export function MainLayout({ children, activeTab, onTabChange }: MainLayoutProps) {
     return (
-        <div className="flex flex-col h-screen bg-ivory texture-paper">
+        <div className="flex flex-col h-dvh bg-ivory texture-paper">
             {/* Subtle warm gradient overlay */}
             <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-parchment/30 pointer-events-none" />
 
