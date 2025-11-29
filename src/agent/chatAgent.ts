@@ -9,7 +9,7 @@ function getLlm() {
       name: "openrouter",
       apiKey: process.env.OPENROUTER_API_KEY!,
       config: {
-        model: "x-ai/grok-4.1-fast:free",
+        model: "x-ai/grok-4-fast",
       },
       referer: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
       title: "Mise Kitchen Assistant",
@@ -201,8 +201,47 @@ export async function* streamChatAgent(
     .join("\n")
     .slice(-2000);
 
-  const messageWithImage = input.imageBase64
-    ? `${input.message || "Please analyze this image"}\n\n[User attached an image - call parseImage to analyze it]`
+  // If there's an image, process it automatically first
+  let imageAnalysisContext = "";
+  if (input.imageBase64) {
+    const toolId = `tool_${++toolCounter}_${Date.now()}`;
+
+    yield {
+      type: "tool_start",
+      id: toolId,
+      name: "parseImage",
+      args: { sourceHint: "auto" },
+    };
+
+    try {
+      const { parseImage } = await import("./signatures/parseImage");
+      const result = await parseImage(input.imageBase64);
+
+      yield {
+        type: "tool_end",
+        id: toolId,
+        name: "parseImage",
+        result,
+      };
+
+      // Build context from parsed image
+      const itemsList = result.items.map((item: any) =>
+        `- ${item.name}: ${item.quantity} ${item.unit} (${item.confidence} confidence)`
+      ).join("\n");
+
+      imageAnalysisContext = `\n\n[Image Analysis Result - ${result.sourceType}]\nItems found:\n${itemsList}${result.notes ? `\nNotes: ${result.notes}` : ""}`;
+    } catch (error) {
+      yield {
+        type: "tool_end",
+        id: toolId,
+        name: "parseImage",
+        error: error instanceof Error ? error.message : "Failed to analyze image",
+      };
+    }
+  }
+
+  const messageWithContext = input.imageBase64
+    ? `${input.message || "Please analyze this image"}${imageAnalysisContext}\n\nBased on the image analysis above, help the user with their request. If they want to add items to inventory, use addInventory with the parsed items.`
     : input.message;
 
   // Store tool events for yielding
@@ -261,7 +300,7 @@ export async function* streamChatAgent(
 
     // Use streaming mode
     const stream = wrappedSignature.streamingForward(getLlm(), {
-      userMessage: messageWithImage,
+      userMessage: messageWithContext,
       conversationContext,
       hasImage: !!input.imageBase64,
     });

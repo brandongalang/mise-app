@@ -1,28 +1,63 @@
-import { ax, ai, AxAIGoogleGeminiModel } from "@ax-llm/ax";
+import { ax, ai } from "@ax-llm/ax";
 import type { VisionExtractionResult, VisionItem } from "@/lib/types";
 
-// Lazy-load Gemini to avoid build-time initialization
+// Lazy-load OpenRouter with Grok 4 for vision
 let _llm: ReturnType<typeof ai> | null = null;
 function getLlm() {
   if (!_llm) {
     _llm = ai({
-      name: "google-gemini",
-      apiKey: process.env.GOOGLE_API_KEY!,
+      name: "openrouter",
+      apiKey: process.env.OPENROUTER_API_KEY!,
       config: {
-        model: AxAIGoogleGeminiModel.Gemini25Flash,
+        model: "x-ai/grok-4-fast",
       },
+      referer: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+      title: "Mise Image Parser",
     });
   }
   return _llm;
 }
 
-// System prompt for image parsing
-const IMAGE_PARSE_PROMPT = `You are a food inventory extraction assistant. Extract food items from images accurately.
+// System prompt for image parsing with explicit structure
+const IMAGE_PARSE_PROMPT = `You are a food inventory extraction assistant. Extract ALL food items from images accurately.
 
-For RECEIPTS: parse OCR text, quantities like 24CT/1.5LB, interpret abbreviations.
-For PHOTOS: identify visible items, estimate quantities.
+TASK: Analyze the image and extract every food item you can identify.
 
-Use lowercase singular names. Set confidence to high, medium, or low. Set needsReview to true when uncertain.`;
+For RECEIPTS:
+- Read ALL line items carefully
+- Parse quantities like "24CT" (24 count), "1.5LB" (1.5 lb), "2PK" (2 pack)
+- Interpret abbreviations: "ORG" = organic, "GRN" = green, "CHK" = chicken
+- Skip non-food items (bags, tax, total, etc.)
+
+For PHOTOS (fridge, groceries, pantry):
+- Identify all visible food items
+- Estimate quantities based on what you see
+- Note brand names in rawText if visible
+
+OUTPUT FORMAT for each item:
+{
+  "name": "lowercase singular name (e.g., 'apple' not 'Apples')",
+  "quantity": number (e.g., 2, 1.5, 12),
+  "unit": "count|lb|oz|g|kg|ml|l|bunch|bag|box|can|bottle|container|pack|dozen",
+  "confidence": "high|medium|low",
+  "needsReview": true if uncertain about name or quantity,
+  "rawText": "original text from receipt or description",
+  "categoryHint": "produce|protein|dairy|pantry|frozen|beverage|condiment|grain|spice|unknown"
+}
+
+CATEGORIES:
+- produce: fruits, vegetables, herbs
+- protein: meat, poultry, fish, eggs, tofu
+- dairy: milk, cheese, yogurt, butter, cream
+- pantry: canned goods, pasta, rice, oils, sauces
+- frozen: frozen foods, ice cream
+- beverage: drinks, juice, soda, water
+- condiment: sauces, dressings, spreads
+- grain: bread, cereal, flour, oats
+- spice: spices, seasonings, salt, pepper
+- unknown: when category is unclear
+
+IMPORTANT: Extract EVERY food item. Do not skip items. Return an empty array only if there are no food items.`;
 
 // Define the ParseImage signature - use setInstruction to avoid signature parsing issues
 const parseImageSignature = ax(

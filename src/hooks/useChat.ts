@@ -100,17 +100,23 @@ export function useChat(): UseChatReturn {
                 throw new Error('No response body');
             }
 
-            // Initialize assistant message
-            setMessages(prev => [
-                ...prev,
-                {
-                    id: assistantMessageId,
-                    role: 'assistant',
-                    content: '',
-                    timestamp: new Date(),
-                    toolCalls: [],
-                },
-            ]);
+            // Don't create assistant message until we have content
+            let assistantMessageCreated = false;
+            const ensureAssistantMessage = () => {
+                if (!assistantMessageCreated) {
+                    assistantMessageCreated = true;
+                    setMessages(prev => [
+                        ...prev,
+                        {
+                            id: assistantMessageId,
+                            role: 'assistant',
+                            content: '',
+                            timestamp: new Date(),
+                            toolCalls: [],
+                        },
+                    ]);
+                }
+            };
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
@@ -141,6 +147,7 @@ export function useChat(): UseChatReturn {
                                     break;
 
                                 case 'tool_start': {
+                                    ensureAssistantMessage();
                                     const newTool: ToolCall = {
                                         id: data.id || uuidv4(),
                                         name: data.name,
@@ -172,6 +179,7 @@ export function useChat(): UseChatReturn {
                                 }
 
                                 case 'stream':
+                                    ensureAssistantMessage();
                                     setIsThinking(false);
                                     setIsStreaming(true);
                                     currentContent += data.token;
@@ -181,6 +189,7 @@ export function useChat(): UseChatReturn {
                                 case 'message':
                                     // Final complete message (fallback if stream didn't work)
                                     if (!currentContent && data.content) {
+                                        ensureAssistantMessage();
                                         currentContent = data.content;
                                         updateMessage(assistantMessageId, { content: currentContent });
                                     }
