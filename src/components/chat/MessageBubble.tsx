@@ -6,13 +6,15 @@ import Image from 'next/image';
 import { RecipePreviewCard } from './RecipePreviewCard';
 import { motion } from 'framer-motion';
 import { User, ChefHat } from 'lucide-react';
+import { Streamdown } from 'streamdown';
 
 interface MessageBubbleProps {
     message: Message;
+    isStreaming?: boolean;
     onRecipeExpand?: (recipe: RecipeCard) => void;
 }
 
-export function MessageBubble({ message, onRecipeExpand }: MessageBubbleProps) {
+export function MessageBubble({ message, isStreaming = false, onRecipeExpand }: MessageBubbleProps) {
     const isUser = message.role === 'user';
 
     return (
@@ -61,10 +63,23 @@ export function MessageBubble({ message, onRecipeExpand }: MessageBubbleProps) {
 
                     {/* Message Content */}
                     <div className={cn(
-                        "whitespace-pre-wrap text-[15px] leading-relaxed",
-                        isUser ? "text-white" : "text-espresso"
+                        "text-[15px] leading-relaxed",
+                        isUser ? "text-white whitespace-pre-wrap" : "text-espresso"
                     )}>
-                        {message.content}
+                        {isUser ? (
+                            // Plain text for user messages
+                            message.content
+                        ) : (
+                            // Streamdown for assistant messages - handles streaming markdown
+                            <div className="streamdown-content">
+                                <Streamdown
+                                    mode={isStreaming ? "streaming" : "static"}
+                                    parseIncompleteMarkdown={isStreaming}
+                                >
+                                    {message.content}
+                                </Streamdown>
+                            </div>
+                        )}
                     </div>
                 </motion.div>
 

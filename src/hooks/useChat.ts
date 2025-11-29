@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 interface UseChatReturn {
     messages: Message[];
     isThinking: boolean;
+    isStreaming: boolean;
     thinkingText: string;
     sendMessage: (text: string, attachments?: Attachment[]) => Promise<void>;
     clearHistory: () => void;
@@ -13,6 +14,7 @@ interface UseChatReturn {
 export function useChat(): UseChatReturn {
     const [messages, setMessages] = useState<Message[]>([]);
     const [isThinking, setIsThinking] = useState(false);
+    const [isStreaming, setIsStreaming] = useState(false);
     const [thinkingText, setThinkingText] = useState('');
     const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -48,7 +50,10 @@ export function useChat(): UseChatReturn {
                 body: JSON.stringify({
                     message: text,
                     attachments,
-                    conversationHistory: messages,
+                    conversationHistory: messages.map(m => ({
+                        role: m.role,
+                        content: m.content,
+                    })),
                 }),
                 signal: abortControllerRef.current.signal,
             });
@@ -63,7 +68,7 @@ export function useChat(): UseChatReturn {
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
-            let assistantMessageId = uuidv4();
+            const assistantMessageId = uuidv4();
             let currentContent = '';
             let buffer = '';
 
@@ -97,8 +102,11 @@ export function useChat(): UseChatReturn {
 
                             if (currentEvent === 'thinking') {
                                 setThinkingText(data.status);
-                            } else if (currentEvent === 'message') {
-                                currentContent += data.content;
+                            } else if (currentEvent === 'stream') {
+                                // Handle streaming tokens - this is where Streamdown shines
+                                setIsThinking(false);
+                                setIsStreaming(true);
+                                currentContent += data.token;
                                 setMessages((prev) =>
                                     prev.map((msg) =>
                                         msg.id === assistantMessageId
@@ -106,12 +114,29 @@ export function useChat(): UseChatReturn {
                                             : msg
                                     )
                                 );
-                            } else if (currentEvent === 'actions') {
-                                // Handle actions if needed, e.g. show a card
-                                // For now, we might want to map specific actions to cards
-                                // But the API seems to return a list of tool calls
+                            } else if (currentEvent === 'message') {
+                                // Final complete message (fallback if stream didn't work)
+                                if (!currentContent) {
+                                    currentContent = data.content;
+                                    setMessages((prev) =>
+                                        prev.map((msg) =>
+                                            msg.id === assistantMessageId
+                                                ? { ...msg, content: currentContent }
+                                                : msg
+                                        )
+                                    );
+                                }
                             } else if (currentEvent === 'complete') {
-                                // Stream finished
+                                setIsStreaming(false);
+                            } else if (currentEvent === 'error') {
+                                console.error('Stream error:', data.message);
+                                setMessages((prev) =>
+                                    prev.map((msg) =>
+                                        msg.id === assistantMessageId
+                                            ? { ...msg, content: `Error: ${data.message}` }
+                                            : msg
+                                    )
+                                );
                             }
                         } catch (e) {
                             console.error('Error parsing SSE data:', e);
@@ -122,10 +147,20 @@ export function useChat(): UseChatReturn {
         } catch (error) {
             if (error instanceof Error && error.name !== 'AbortError') {
                 console.error('Chat error:', error);
-                // Optionally add error message to chat
+                // Add error message to chat
+                setMessages((prev) => [
+                    ...prev,
+                    {
+                        id: uuidv4(),
+                        role: 'assistant',
+                        content: 'Sorry, I encountered an error. Please try again.',
+                        timestamp: new Date(),
+                    },
+                ]);
             }
         } finally {
             setIsThinking(false);
+            setIsStreaming(false);
             setThinkingText('');
             abortControllerRef.current = null;
         }
@@ -134,6 +169,7 @@ export function useChat(): UseChatReturn {
     return {
         messages,
         isThinking,
+        isStreaming,
         thinkingText,
         sendMessage,
         clearHistory,

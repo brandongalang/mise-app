@@ -16,7 +16,7 @@ interface ChatContainerProps {
 }
 
 export function ChatContainer({ className }: ChatContainerProps) {
-    const { messages, isThinking, thinkingText, sendMessage } = useChat();
+    const { messages, isThinking, isStreaming, thinkingText, sendMessage } = useChat();
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const [isInventoryOpen, setIsInventoryOpen] = useState(false);
 
@@ -26,7 +26,7 @@ export function ChatContainer({ className }: ChatContainerProps) {
 
     useEffect(() => {
         scrollToBottom();
-    }, [messages, isThinking]);
+    }, [messages, isThinking, isStreaming]);
 
     const handleQuickAction = (action: 'scan' | 'recipe' | 'inventory') => {
         switch (action) {
@@ -44,6 +44,9 @@ export function ChatContainer({ className }: ChatContainerProps) {
     const handleRecipeExpand = (recipe: RecipeCard) => {
         console.log('Expand recipe:', recipe);
     };
+
+    // Find the last assistant message for streaming indicator
+    const lastAssistantIndex = messages.findLastIndex(m => m.role === 'assistant');
 
     return (
         <div className={`flex flex-col h-full bg-ivory ${className}`}>
@@ -136,6 +139,7 @@ export function ChatContainer({ className }: ChatContainerProps) {
                                 >
                                     <MessageBubble
                                         message={msg}
+                                        isStreaming={isStreaming && index === lastAssistantIndex}
                                         onRecipeExpand={handleRecipeExpand}
                                     />
                                 </motion.div>
@@ -175,7 +179,7 @@ export function ChatContainer({ className }: ChatContainerProps) {
                         )}
                     </AnimatePresence>
 
-                    <ChatInput onSend={sendMessage} disabled={isThinking} />
+                    <ChatInput onSend={sendMessage} disabled={isThinking || isStreaming} />
                 </div>
             </div>
 

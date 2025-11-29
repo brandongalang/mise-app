@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Streamdown - AI-powered markdown streaming */
+@source "../node_modules/streamdown/dist/index.js";
+
 /* ============================================
    MISE - KITCHEN ASSISTANT DESIGN SYSTEM
    "Vintage Recipe Card meets Digital Craft"
@@ -522,4 +525,153 @@ h3 {
 .tab-indicator {
   animation: tab-indicator 0.2s ease-out forwards;
   transform-origin: left center;
+}
+
+/* ============================================
+   STREAMDOWN MARKDOWN STYLES
+   Custom styling for AI-powered streaming markdown
+   ============================================ */
+
+.streamdown-content {
+  line-height: 1.6;
+}
+
+.streamdown-content p {
+  margin-bottom: 0.75em;
+}
+
+.streamdown-content p:last-child {
+  margin-bottom: 0;
+}
+
+.streamdown-content h1,
+.streamdown-content h2,
+.streamdown-content h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--color-espresso);
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+
+.streamdown-content h1:first-child,
+.streamdown-content h2:first-child,
+.streamdown-content h3:first-child {
+  margin-top: 0;
+}
+
+.streamdown-content h1 {
+  font-size: 1.25rem;
+}
+
+.streamdown-content h2 {
+  font-size: 1.125rem;
+}
+
+.streamdown-content h3 {
+  font-size: 1rem;
+}
+
+.streamdown-content ul,
+.streamdown-content ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.streamdown-content li {
+  margin-bottom: 0.25em;
+}
+
+.streamdown-content ul li {
+  list-style-type: disc;
+}
+
+.streamdown-content ol li {
+  list-style-type: decimal;
+}
+
+.streamdown-content strong {
+  font-weight: 600;
+  color: var(--color-espresso);
+}
+
+.streamdown-content em {
+  font-style: italic;
+}
+
+.streamdown-content code {
+  background: var(--color-parchment);
+  padding: 0.125em 0.375em;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: ui-monospace, monospace;
+}
+
+.streamdown-content pre {
+  background: var(--color-parchment);
+  padding: 0.75em 1em;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 0.75em 0;
+}
+
+.streamdown-content pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.streamdown-content blockquote {
+  border-left: 3px solid var(--color-terracotta);
+  padding-left: 1em;
+  margin: 0.75em 0;
+  color: var(--color-mocha);
+  font-style: italic;
+}
+
+.streamdown-content a {
+  color: var(--color-terracotta);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.streamdown-content a:hover {
+  color: var(--color-terracotta-dark);
+}
+
+.streamdown-content hr {
+  border: none;
+  height: 1px;
+  background: var(--color-clay-light);
+  margin: 1em 0;
+}
+
+.streamdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75em 0;
+  font-size: 0.9em;
+}
+
+.streamdown-content th,
+.streamdown-content td {
+  padding: 0.5em;
+  border: 1px solid var(--color-clay-light);
+  text-align: left;
+}
+
+.streamdown-content th {
+  background: var(--color-parchment);
+  font-weight: 600;
+}
+
+/* Streaming cursor animation */
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.streamdown-content [data-streaming="true"]::after {
+  content: "▌";
+  animation: cursor-blink 1s step-end infinite;
+  color: var(--color-terracotta);
 }
