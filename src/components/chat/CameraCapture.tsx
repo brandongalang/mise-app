@@ -198,6 +198,18 @@ export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps
 
                 {/* Camera View / Preview */}
                 <div className="flex-1 relative overflow-hidden">
+                    {/* Video element always rendered to ensure ref is available during initialization */}
+                    <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className={cn(
+                            "absolute inset-0 w-full h-full object-cover",
+                            (isLoading || capturedImage || error) && "invisible"
+                        )}
+                    />
+
                     {error ? (
                         <div className="absolute inset-0 flex items-center justify-center p-8">
                             <div className="text-center">
@@ -227,15 +239,7 @@ export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps
                             alt="Captured"
                             className="absolute inset-0 w-full h-full object-contain"
                         />
-                    ) : (
-                        <video
-                            ref={videoRef}
-                            autoPlay
-                            playsInline
-                            muted
-                            className="absolute inset-0 w-full h-full object-cover"
-                        />
-                    )}
+                    ) : null}
 
                     {/* Hidden canvas for capture */}
                     <canvas ref={canvasRef} className="hidden" />
