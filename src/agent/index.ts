@@ -18,3 +18,10 @@ export {
 // Re-export signatures for AI extraction
 export { parseImage } from './signatures/parseImage';
 export { generateRecipe } from './signatures/generateRecipe';
+
+// Export tool definitions for ax function calling
+export { inventoryTools } from './tools/definitions';
+
+// Export chat agent
+export { runChatAgent, streamChatAgent } from './chatAgent';
+export type { ChatAgentInput, ChatAgentResult, ToolEvent } from './chatAgent';
