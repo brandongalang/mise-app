@@ -1,4 +1,4 @@
-import { ax, ai } from "@ax-llm/ax";
+import { ai, type AxChatResponse, type AxFunction } from "@ax-llm/ax";
 import { inventoryTools } from "./tools/definitions";
 
 // Lazy-load OpenRouter client to avoid build-time initialization
@@ -59,13 +59,6 @@ CONFIRMATIONS:
 
 Be friendly, practical, and focused on helping them use their ingredients effectively.
 Use markdown formatting for better readability when appropriate (lists, bold, headers).`;
-
-// Define the chat signature with functions - use simple signature, set instruction separately
-const chatSignature = ax(
-  `userMessage:string, conversationContext?:string, hasImage?:boolean -> assistantResponse:string`,
-  { functions: inventoryTools }
-);
-chatSignature.setInstruction(SYSTEM_PROMPT);
 
 export interface ChatAgentInput {
   message: string;
@@ -156,22 +149,37 @@ export async function runChatAgent(input: ChatAgentInput): Promise<ChatAgentResu
     },
   }));
 
-  // Create signature with wrapped tools
-  const wrappedSignature = ax(
-    `userMessage:string, conversationContext?:string, hasImage?:boolean -> assistantResponse:string`,
-    { functions: wrappedTools }
-  );
-  wrappedSignature.setInstruction(SYSTEM_PROMPT);
+  // Build chat messages for direct llm.chat() call
+  const chatPrompt: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+    { role: "system", content: SYSTEM_PROMPT },
+  ];
 
-  // Run the agent
-  const result = await wrappedSignature.forward(getLlm(), {
-    userMessage: messageWithImage,
-    conversationContext,
-    hasImage: !!input.imageBase64,
-  });
+  // Add conversation history
+  if (input.conversationHistory) {
+    for (const msg of input.conversationHistory) {
+      chatPrompt.push({ role: msg.role, content: msg.content });
+    }
+  }
+
+  // Add current user message
+  chatPrompt.push({ role: "user", content: messageWithImage });
+
+  // Use direct llm.chat() - bypasses signature parsing
+  const llm = getLlm();
+  const response = await llm.chat(
+    {
+      chatPrompt,
+      functions: wrappedTools,
+      functionCall: "auto",
+    },
+    { stream: false }
+  );
+
+  // Extract content from response
+  const content = (response as AxChatResponse).results?.[0]?.content || "";
 
   return {
-    response: result.assistantResponse,
+    response: content,
     toolEvents,
   };
 }
@@ -292,35 +300,48 @@ export async function* streamChatAgent(
   }));
 
   try {
-    const wrappedSignature = ax(
-      `userMessage:string, conversationContext?:string, hasImage?:boolean -> assistantResponse:string`,
-      { functions: wrappedTools }
-    );
-    wrappedSignature.setInstruction(SYSTEM_PROMPT);
+    // Build chat messages for direct llm.chat() call
+    const chatPrompt: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+      { role: "system", content: SYSTEM_PROMPT },
+    ];
 
-    // Use streaming mode
-    const stream = wrappedSignature.streamingForward(getLlm(), {
-      userMessage: messageWithContext,
-      conversationContext,
-      hasImage: !!input.imageBase64,
-    });
-
-    for await (const chunk of stream) {
-      // Yield any pending tool events first
-      while (pendingEvents.length > 0) {
-        yield pendingEvents.shift()!;
+    // Add conversation history
+    if (input.conversationHistory) {
+      for (const msg of input.conversationHistory) {
+        chatPrompt.push({ role: msg.role, content: msg.content });
       }
+    }
 
-      // Stream the response tokens - use partial for accumulated value
-      const partialResponse = chunk.partial?.assistantResponse || chunk.delta?.assistantResponse;
-      if (partialResponse && typeof partialResponse === "string") {
-        // ax streams the full value each time, so we need to track what's new
-        const newContent = partialResponse.slice(tokenIndex);
-        if (newContent) {
-          for (const char of newContent) {
-            yield { type: "stream", token: char, index: ++tokenIndex };
-          }
-        }
+    // Add current user message
+    chatPrompt.push({ role: "user", content: messageWithContext });
+
+    // Use direct llm.chat() - bypasses signature parsing
+    const llm = getLlm();
+
+    // Use non-streaming mode for simpler response handling
+    // Then stream character by character to the client
+    const response = await llm.chat(
+      {
+        chatPrompt,
+        functions: wrappedTools,
+        functionCall: "auto",
+      },
+      { stream: false }
+    );
+
+    // Yield any pending tool events
+    while (pendingEvents.length > 0) {
+      yield pendingEvents.shift()!;
+    }
+
+    // Extract content from response
+    const chatResponse = response as AxChatResponse;
+    const content = chatResponse.results?.[0]?.content || "";
+
+    // Stream character by character to the client
+    if (content) {
+      for (const char of content) {
+        yield { type: "stream", token: char, index: ++tokenIndex };
       }
     }
 
