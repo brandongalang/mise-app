@@ -9,7 +9,7 @@ Implement a multi-tenant architecture supporting separate "Households" (families
 *   **Household:** The top-level tenant. Corresponds to a billing account or a physical home.
 *   **Profile:** A specific user within a household (e.g., "Mom", "Dad", "Kids").
 *   **Data Scope:** All inventory data (`master_ingredients`, `containers`, `recipes`, `transactions`) is scoped to the **Household**. Profiles act as the "actor" modifying this shared household state.
-*   **Strict Isolation:** There is NO global shared data. `master_ingredients` are private to the household. This avoids "polluting" one family's autocomplete with another family's custom items.
+*   **Strict Isolation:** There is NO global shared data. `master_ingredients` are private to the household.
 
 ### Authentication Flow
 1.  **Auth (Supabase):** User logs in via Email/Password. This identifies the **Household** (1 Auth User = 1 Household).
@@ -32,7 +32,6 @@ export const households = pgTable("households", {
   id: uuid("id").primaryKey(), // Matches auth.users.id
   name: text("name").notNull().default("My Household"),
   createdAt: timestamp("created_at").defaultNow(),
-  // Future: subscription_status, max_profiles, etc.
 });
 ```
 
@@ -43,7 +42,7 @@ export const profiles = pgTable("profiles", {
   id: uuid("id").defaultRandom().primaryKey(),
   householdId: uuid("household_id").notNull().references(() => households.id, { onDelete: 'cascade' }),
   displayName: text("display_name").notNull(),
-  avatarColor: text("avatar_color").notNull().default("blue"), // orange, green, purple, etc.
+  avatarColor: text("avatar_color").notNull().default("blue"), // See UI section for palette
   pinHash: text("pin_hash"), // Null = no PIN. Bcrypt hash.
   isAdmin: boolean("is_admin").default(false),
   createdAt: timestamp("created_at").defaultNow(),
@@ -62,7 +61,7 @@ All the following tables must have a `household_id` column added. This column **
 
 **Migration Strategy (Zero Downtime / Data Preservation):**
 1.  **Create Tables:** Create `households` and `profiles`.
-2.  **Seed Default Household:** Create a script that looks for all data currently without a `household_id` (which is everything).
+2.  **Seed Default Household:** Create a script that looks for all data currently without a `household_id`.
     *   Create a "Legacy Household" in the `households` table (ID: `0000...`).
     *   Create a default "Admin" profile for it.
 3.  **Bulk Update:** Update all existing rows in `containers`, `master_ingredients`, etc., setting `household_id = '0000...'`.
@@ -72,9 +71,6 @@ All the following tables must have a `household_id` column added. This column **
 ## 3. Supabase Security (Row Level Security)
 
 Enable RLS on **ALL** tables. The golden rule is: **"Users can only see rows where `household_id` matches their Auth ID."**
-
-### RLS Policies
-We will apply a standard policy across all tables (`containers`, `master_ingredients`, etc.).
 
 **Policy: "Tenant Isolation"**
 ```sql
@@ -109,79 +105,85 @@ create trigger on_auth_user_created
   for each row execute procedure public.handle_new_user();
 ```
 
-## 4. Frontend & UI Implementation Guidelines
+## 4. Frontend & UI/UX Implementation Guidelines
 
-### A. State Management (`SessionContext`)
-Create a robust context to manage the "User -> Household -> Profile" hierarchy.
+This is the core of the "Netflix Experience". It must feel fluid, tactile, and polished.
 
-```typescript
-interface SessionContextType {
-  user: User | null;              // Supabase Auth User
-  household: Household | null;    // The fetched household row
-  activeProfile: Profile | null;  // The currently selected profile
-  profiles: Profile[];            // List of all profiles (for switching)
-  isLoading: boolean;
+### A. Visual Language & Palette
+Use bold, vibrant gradients for avatars to contrast against a clean background.
 
-  selectProfile: (profileId: string, pin?: string) => Promise<boolean>;
-  signOut: () => Promise<void>;
-}
-```
+*   **Avatar Variants (CSS Classes):**
+    *   `classic-red`: `bg-gradient-to-br from-red-500 to-red-700`
+    *   `ocean-blue`: `bg-gradient-to-br from-blue-400 to-blue-600`
+    *   `jungle-green`: `bg-gradient-to-br from-emerald-400 to-emerald-600`
+    *   `royal-purple`: `bg-gradient-to-br from-purple-500 to-purple-700`
+    *   `sunny-yellow`: `bg-gradient-to-br from-yellow-400 to-orange-500`
 
-### B. Screens / Views
+### B. Profile Selection Page (`/profiles`)
 
-#### 1. Landing / Login (`/login`)
-*   **Design:** Clean, centered card.
-*   **Functionality:**
-    *   Email/Password Input.
-    *   "Sign Up" toggle.
-    *   On Submit: `supabase.auth.signInWithPassword`.
-    *   On Success: Fetch household. If no profile selected, redirect to `/profiles`.
+**Layout:**
+*   Centered content on a dark or neutral background (e.g., `bg-neutral-950`).
+*   **Header:** "Who's cooking today?" (Font: Fraunces, Text: 3xl/4xl, Fade-in on load).
 
-#### 2. Profile Selection (`/profiles`)
-*   **Route Protection:** Accessible only if Authenticated.
-*   **Layout:**
-    *   Heading: "Who's in the kitchen?"
-    *   Grid: Flex-wrap, centered.
-*   **Component: `ProfileCard`**
-    *   Circle div (w-32 h-32), hover:scale-105 transition.
-    *   Dynamic background color based on `avatarColor` (tail-wind: `bg-blue-500`, `bg-red-500`).
-    *   First letter of `displayName` in center (text-4xl white bold).
-    *   Name text below.
-*   **Component: `AddProfileButton`**
-    *   Dashed border circle.
-    *   Plus icon.
-    *   Opens a small modal to enter Name and optional PIN.
+**Animation (Framer Motion):**
+*   **Container:** `staggerChildren: 0.1` (Profiles pop in one by one).
+*   **Profile Card:**
+    *   *Initial:* `{ opacity: 0, scale: 0.9 }`
+    *   *Animate:* `{ opacity: 1, scale: 1 }`
+    *   *Hover:* `{ scale: 1.1, y: -5 }` (Spring stiffness: 300).
+    *   *Tap:* `{ scale: 0.95 }`
+*   **Lock Icon:**
+    *   If profile has PIN (`pin_hash != null`), show a small Lock icon (Lucide `Lock`) centered in the avatar, but *faded out* (`opacity: 0`).
+    *   *On Hover:* Lock icon fades in (`opacity: 1`) and scales up slightly.
 
-#### 3. PIN Entry Modal
-*   **Trigger:** Clicking a locked profile.
-*   **UI:**
-    *   "Enter PIN for [Name]"
-    *   4 inputs (`<input type="password" maxLength={1} />`).
-    *   **Logic:**
-        *   `onChange`: Update state, auto-focus next input.
-        *   `onKeyDown`: Backspace moves focus to previous.
-        *   On 4th digit: Auto-submit.
-    *   **Animation:** Shake animation on incorrect PIN.
+**Interaction:**
+*   **Click:**
+    *   If No PIN -> Set Context -> `router.push('/')`.
+    *   If PIN -> Open PIN Modal.
 
-#### 4. Dashboard Integration
-*   **Header:**
-    *   Top right corner shows `activeProfile` avatar (small).
-    *   Hover/Click -> Dropdown menu.
-        *   "Switch Profile" (Redirects to `/profiles`).
-        *   "Account Settings" (Household name, etc.).
-        *   "Log Out".
+### C. PIN Entry Experience (The "Netflix" Feel)
 
-### C. Agent & Backend Context
-The Agent must be "Household Aware".
+**Component: `PinModal`**
+*   **Overlay:** `fixed inset-0 bg-black/80 backdrop-blur-sm` (Fade in).
+*   **Content:**
+    *   Heading: "Enter PIN for [Name]" (Text-white, lg).
+    *   **Input Area:** 4 large circles (w-4 h-4).
+        *   **Empty:** Border-2 border-white/50 bg-transparent.
+        *   **Filled:** `bg-white` border-white (Scale up pop effect on fill).
+    *   **Hidden Input:** A real `<input type="number" pattern="[0-9]*" />` that is opacity-0 but covers the area or captures focus. This ensures mobile keyboard pops up.
 
-1.  **Tool Update:** All DB tools (`searchInventory`, `addInventory`) currently assume a global scope or need explicit filtering.
-    *   **Action:** Update `src/db/supabase.ts`.
-    *   **Implementation:** The API client should ideally be instantiated *per request* or *per session* with the `household_id`.
-    *   *Simplification:* Since we rely on RLS (`auth.uid()`), the Supabase client created with `createClientComponentClient` (frontend) automatically sends the Auth token. RLS handles the filtering "magically".
-    *   **Server-Side:** For the Agent (running on server/edge), we must ensure we create the Supabase client *using the user's session token*, NOT the Service Role key (unless we manually enforce the `household_id` filter).
-    *   **Guidance:** **ALWAYS pass the user's Access Token to the Agent.** Do not let the Agent run as Admin.
+**Behavior:**
+*   **Auto-Focus:** Input focuses immediately on mount.
+*   **Success:**
+    *   All 4 dots fill.
+    *   Brief pause (300ms).
+    *   Modal fades out.
+    *   Redirect.
+*   **Error (Incorrect PIN):**
+    *   **Shake Animation:** The entire dot container shakes left-right (x: [-10, 10, -10, 10, 0]).
+    *   **Reset:** Dots clear after shake.
+    *   **Haptic:** If possible (`navigator.vibrate`), trigger a short buzz.
 
-## 5. Execution Steps & Checklist
+### D. "Manage Profiles" Mode
+*   **Toggle:** "Manage Profiles" button at top right.
+*   **State:** When active, a Pencil Icon (`Pencil`) overlays *every* avatar.
+*   **Click:** Opens `EditProfileModal` instead of selecting.
+    *   Edit Name.
+    *   Change Color.
+    *   Set/Remove PIN.
+    *   Delete Profile (if not last Admin).
+
+### E. Dashboard Header Update
+*   **Avatar:** Small (w-8 h-8) version of the gradient circle.
+*   **Dropdown (Vaul or Radix UI):**
+    *   **Animation:** Slide down + Fade in.
+    *   **Items:**
+        *   Grid of *other* profiles (Quick Switch).
+        *   "Exit Profile" (Log out of profile, keep household logged in).
+        *   Separator.
+        *   "Sign Out of [Household Name]".
+
+## 5. Execution Steps
 
 1.  **Migration Script (SQL)**
     *   [ ] Write `0001_household_migration.sql`.
@@ -198,12 +200,13 @@ The Agent must be "Household Aware".
     *   [ ] Implement `SessionProvider`.
     *   [ ] Wrap root layout.
 
-4.  **UI Construction**
-    *   [ ] Build `/login` page.
-    *   [ ] Build `/profiles` page.
-    *   [ ] Build `PinInput` component.
-    *   [ ] Update `MainLayout` header.
+4.  **UI Construction (The Fun Part)**
+    *   [ ] **Install:** Ensure `framer-motion` is available.
+    *   [ ] **Login Page:** Build `/login` (Clean, simple).
+    *   [ ] **Profile Page:** Build `/profiles` with the *exact* Framer Motion specs above.
+    *   [ ] **Pin Component:** Build `<PinPad />` with the "Shake" and "Dot Fill" logic.
+    *   [ ] **Header:** Update `MainLayout` with the Profile Switcher.
 
 5.  **Agent Logic**
     *   [ ] Verify Agent tools use `supabase` client with user context.
-    *   [ ] Test that "Dad's" inventory doesn't show up for "Mom" (if they were in different households—though here they share. Test that User A doesn't see User B's).
+    *   [ ] Test that "Dad's" inventory doesn't show up for "Mom" (if they were in different households).
