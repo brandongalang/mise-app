@@ -147,6 +147,19 @@ export interface Attachment {
   mimeType: string;
 }
 
+// Tool call types for AI Elements-style streaming
+export type ToolStatus = 'pending' | 'running' | 'completed' | 'error';
+
+export interface ToolCall {
+  id: string;
+  name: string;
+  args?: Record<string, unknown>;
+  result?: unknown;
+  status: ToolStatus;
+  startTime?: Date;
+  endTime?: Date;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -154,6 +167,7 @@ export interface Message {
   timestamp: Date;
   attachments?: Attachment[];
   actionCard?: RecipeCard | ConfirmationCard;
+  toolCalls?: ToolCall[];
 }
 
 export interface RecipeCard {

@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { Message, Attachment } from '@/lib/types';
+import { Message, Attachment, ToolCall, ToolStatus } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 
 interface UseChatReturn {
@@ -7,6 +7,7 @@ interface UseChatReturn {
     isThinking: boolean;
     isStreaming: boolean;
     thinkingText: string;
+    activeTools: ToolCall[];
     sendMessage: (text: string, attachments?: Attachment[]) => Promise<void>;
     clearHistory: () => void;
 }
@@ -16,10 +17,12 @@ export function useChat(): UseChatReturn {
     const [isThinking, setIsThinking] = useState(false);
     const [isStreaming, setIsStreaming] = useState(false);
     const [thinkingText, setThinkingText] = useState('');
+    const [activeTools, setActiveTools] = useState<ToolCall[]>([]);
     const abortControllerRef = useRef<AbortController | null>(null);
 
     const clearHistory = useCallback(() => {
         setMessages([]);
+        setActiveTools([]);
         localStorage.removeItem('chat_history');
     }, []);
 
@@ -36,6 +39,7 @@ export function useChat(): UseChatReturn {
 
         setMessages((prev) => [...prev, userMessage]);
         setIsThinking(true);
+        setActiveTools([]);
         setThinkingText(attachments.length > 0 ? 'Analyzing image...' : 'Thinking...');
 
         try {
@@ -71,6 +75,7 @@ export function useChat(): UseChatReturn {
             const assistantMessageId = uuidv4();
             let currentContent = '';
             let buffer = '';
+            let toolCalls: ToolCall[] = [];
 
             // Initialize assistant message
             setMessages((prev) => [
@@ -80,6 +85,7 @@ export function useChat(): UseChatReturn {
                     role: 'assistant',
                     content: '',
                     timestamp: new Date(),
+                    toolCalls: [],
                 },
             ]);
 
@@ -89,7 +95,7 @@ export function useChat(): UseChatReturn {
 
                 buffer += decoder.decode(value, { stream: true });
                 const lines = buffer.split('\n');
-                buffer = lines.pop() || ''; // Keep the last incomplete line
+                buffer = lines.pop() || '';
 
                 let currentEvent = '';
 
@@ -102,8 +108,51 @@ export function useChat(): UseChatReturn {
 
                             if (currentEvent === 'thinking') {
                                 setThinkingText(data.status);
+                            } else if (currentEvent === 'tool_start') {
+                                // Tool started
+                                const newTool: ToolCall = {
+                                    id: data.id || uuidv4(),
+                                    name: data.name,
+                                    args: data.args,
+                                    status: 'running',
+                                    startTime: new Date(),
+                                };
+                                toolCalls = [...toolCalls, newTool];
+                                setActiveTools(toolCalls);
+                                setThinkingText(`Running ${data.name}...`);
+
+                                // Update message with tool calls
+                                setMessages((prev) =>
+                                    prev.map((msg) =>
+                                        msg.id === assistantMessageId
+                                            ? { ...msg, toolCalls }
+                                            : msg
+                                    )
+                                );
+                            } else if (currentEvent === 'tool_end') {
+                                // Tool completed
+                                toolCalls = toolCalls.map((t) =>
+                                    t.id === data.id
+                                        ? {
+                                            ...t,
+                                            status: data.error ? 'error' as ToolStatus : 'completed' as ToolStatus,
+                                            result: data.result,
+                                            endTime: new Date(),
+                                        }
+                                        : t
+                                );
+                                setActiveTools(toolCalls);
+
+                                // Update message with tool calls
+                                setMessages((prev) =>
+                                    prev.map((msg) =>
+                                        msg.id === assistantMessageId
+                                            ? { ...msg, toolCalls }
+                                            : msg
+                                    )
+                                );
                             } else if (currentEvent === 'stream') {
-                                // Handle streaming tokens - this is where Streamdown shines
+                                // Handle streaming tokens
                                 setIsThinking(false);
                                 setIsStreaming(true);
                                 currentContent += data.token;
@@ -115,7 +164,7 @@ export function useChat(): UseChatReturn {
                                     )
                                 );
                             } else if (currentEvent === 'message') {
-                                // Final complete message (fallback if stream didn't work)
+                                // Final complete message
                                 if (!currentContent) {
                                     currentContent = data.content;
                                     setMessages((prev) =>
@@ -128,6 +177,7 @@ export function useChat(): UseChatReturn {
                                 }
                             } else if (currentEvent === 'complete') {
                                 setIsStreaming(false);
+                                setActiveTools([]);
                             } else if (currentEvent === 'error') {
                                 console.error('Stream error:', data.message);
                                 setMessages((prev) =>
@@ -147,7 +197,6 @@ export function useChat(): UseChatReturn {
         } catch (error) {
             if (error instanceof Error && error.name !== 'AbortError') {
                 console.error('Chat error:', error);
-                // Add error message to chat
                 setMessages((prev) => [
                     ...prev,
                     {
@@ -162,6 +211,7 @@ export function useChat(): UseChatReturn {
             setIsThinking(false);
             setIsStreaming(false);
             setThinkingText('');
+            setActiveTools([]);
             abortControllerRef.current = null;
         }
     }, [messages]);
@@ -171,6 +221,7 @@ export function useChat(): UseChatReturn {
         isThinking,
         isStreaming,
         thinkingText,
+        activeTools,
         sendMessage,
         clearHistory,
     };
