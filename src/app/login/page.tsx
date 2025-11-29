@@ -43,14 +43,12 @@ export default function LoginPage() {
               />
             </div>
 
-            <button
-              type="submit" // In real app this calls supabase.auth.signIn
-              className="w-full bg-terracotta text-white font-bold py-3 rounded-lg hover:bg-terracotta-dark transition-colors shadow-md hover:shadow-lg transform active:scale-95 duration-200"
+            <Link
+              href="/profiles"
+              className="block w-full text-center bg-terracotta text-white font-bold py-3 rounded-lg hover:bg-terracotta-dark transition-colors shadow-md hover:shadow-lg transform active:scale-95 duration-200"
             >
-               <Link href="/profiles" className="w-full block h-full">
-                 Sign In
-               </Link>
-            </button>
+               Sign In
+            </Link>
           </form>
 
            <div className="mt-6 text-center text-sm text-mocha">

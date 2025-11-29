@@ -183,8 +183,9 @@ Use bold, vibrant gradients for avatars to contrast against a clean background.
         *   Separator.
         *   "Sign Out of [Household Name]".
 
-## 5. Execution Steps
+## 5. Execution Steps & Status
 
+### Completed
 1.  **Migration Script (SQL)**
     *   [x] Write `0001_household_migration.sql`. (Created as `supabase/migrations/20250218120000_household_logic.sql`)
     *   [x] Define `households` and `profiles`.
@@ -194,19 +195,34 @@ Use bold, vibrant gradients for avatars to contrast against a clean background.
 
 2.  **Schema Update (Code)**
     *   [x] Update `src/db/schema.ts` with new tables and relations. (Note: Partial update - did not modify existing table schemas to avoid breaking current build).
-    *   [ ] Run `drizzle-kit push` or migration. (To be done by future agent).
 
 3.  **Authentication & Context**
     *   [x] Implement `SessionProvider`.
     *   [x] Wrap root layout.
+    *   [x] **Note:** Implementation uses Mock Data (`MOCK_PROFILES`) to verify UI without backend dependency.
 
 4.  **UI Construction (The Fun Part)**
     *   [x] **Install:** Ensure `framer-motion` is available.
-    *   [x] **Login Page:** Build `/login` (Clean, simple).
-    *   [x] **Profile Page:** Build `/profiles` with the *exact* Framer Motion specs above.
-    *   [x] **Pin Component:** Build `<PinPad />` with the "Shake" and "Dot Fill" logic.
-    *   [ ] **Header:** Update `MainLayout` with the Profile Switcher.
+    *   [x] **Login Page:** Build `/login`.
+    *   [x] **Profile Page:** Build `/profiles` with "Vintage/Mise" theme and animations.
+    *   [x] **Pin Component:** Build `<PinModal />` with shake/vibration.
+    *   [x] **Header:** Update `MainLayout` with the Profile Switcher (Vaul Drawer).
 
-5.  **Agent Logic**
+5.  **Navigation & Access Control**
+    *   [x] Implement Redirect in `src/app/page.tsx`: Redirect to `/profiles` if no active profile.
+    *   [x] Verify Header Visibility: Ensure Header only appears on Dashboard, not on Profile Selection.
+    *   [x] Verify Profile Switching: Users can switch profiles via the Header drawer.
+    *   [x] Verify Exit Profile: Returns user to `/profiles` selection screen.
+
+### Remaining (Backend Integration)
+1.  **Schema Migration**
+    *   [ ] Update `src/db/schema.ts` to add `household_id` to all inventory tables.
+    *   [ ] Run `drizzle-kit push` or apply migration to Supabase.
+
+2.  **Supabase Connection**
+    *   [ ] Update `SessionContext.tsx` to replace `MOCK_PROFILES` with real Supabase `auth.getUser()` and `from('profiles').select()`.
+    *   [ ] Verify RLS policies (ensure user cannot see other household's data).
+
+3.  **Agent Logic**
     *   [ ] Verify Agent tools use `supabase` client with user context.
     *   [ ] Test that "Dad's" inventory doesn't show up for "Mom" (if they were in different households).

@@ -57,13 +57,13 @@ export function PinModal({ isOpen, onClose, onSuccess, profileName, expectedPinH
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Overlay */}
+          {/* Overlay - Glass Frosted Ivory */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-ivory/80 backdrop-blur-md z-50 flex items-center justify-center p-4"
           >
             {/* Modal Content */}
             <motion.div
@@ -71,14 +71,28 @@ export function PinModal({ isOpen, onClose, onSuccess, profileName, expectedPinH
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md flex flex-col items-center"
+              className="w-full max-w-md flex flex-col items-center bg-white border border-parchment shadow-xl rounded-2xl p-10 relative"
             >
-              <h2 className="text-white text-2xl font-display mb-8">
-                Enter PIN for {profileName}
+              <button
+                  onClick={onClose}
+                  className="absolute top-4 right-4 text-warm-gray hover:text-espresso transition-colors"
+              >
+                  <X size={20} />
+              </button>
+
+              <div className="w-12 h-12 bg-terracotta/10 rounded-full flex items-center justify-center mb-6">
+                 <Lock className="text-terracotta w-6 h-6" />
+              </div>
+
+              <h2 className="text-espresso text-2xl font-display font-bold mb-2">
+                Enter PIN
               </h2>
+              <p className="text-mocha mb-8">
+                Please enter the 4-digit PIN for <strong>{profileName}</strong>
+              </p>
 
               <motion.div
-                className="flex gap-6 mb-8 relative"
+                className="flex gap-4 mb-8 relative"
                 animate={isShaking ? { x: [-10, 10, -10, 10, 0] } : {}}
                 transition={{ duration: 0.4 }}
               >
@@ -87,8 +101,8 @@ export function PinModal({ isOpen, onClose, onSuccess, profileName, expectedPinH
                     key={i}
                     className={`w-4 h-4 rounded-full border-2 transition-all duration-200 ${
                       pin.length > i
-                        ? "bg-white border-white scale-110"
-                        : "bg-transparent border-white/50"
+                        ? "bg-terracotta border-terracotta scale-110"
+                        : "bg-transparent border-warm-gray-light"
                     }`}
                   />
                 ))}
@@ -106,12 +120,9 @@ export function PinModal({ isOpen, onClose, onSuccess, profileName, expectedPinH
                 />
               </motion.div>
 
-              <button
-                onClick={onClose}
-                className="text-white/50 hover:text-white transition-colors mt-8 text-sm uppercase tracking-widest font-semibold"
-              >
-                Cancel
-              </button>
+              <div className="text-center text-xs text-warm-gray uppercase tracking-widest font-semibold">
+                Secured Profile
+              </div>
 
             </motion.div>
           </motion.div>

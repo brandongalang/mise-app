@@ -57,6 +57,7 @@ interface SessionContextType {
   activeProfile: Profile | null;
   isLoading: boolean;
   selectProfile: (profileId: string) => void;
+  exitProfile: () => void;
   signOut: () => Promise<void>;
   refreshProfiles: () => Promise<void>;
 }
@@ -106,6 +107,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const exitProfile = () => {
+    setActiveProfile(null);
+    localStorage.removeItem("active_profile_id");
+    router.push("/profiles");
+  };
+
   const signOut = async () => {
     setActiveProfile(null);
     localStorage.removeItem("active_profile_id");
@@ -126,6 +133,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         activeProfile,
         isLoading,
         selectProfile,
+        exitProfile,
         signOut,
         refreshProfiles,
       }}

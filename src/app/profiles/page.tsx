@@ -54,16 +54,14 @@ export default function ProfileSelectionPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#141414] flex flex-col items-center justify-center p-8 overflow-hidden relative">
-       {/* Background gradient hint */}
-       <div className="absolute inset-0 bg-gradient-to-b from-black/0 to-black/80 pointer-events-none" />
+    <div className="min-h-screen bg-ivory flex flex-col items-center justify-center p-8 overflow-hidden relative texture-paper">
 
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="z-10 w-full max-w-5xl flex flex-col items-center"
       >
-        <h1 className="text-3xl md:text-5xl font-display text-white mb-12 tracking-tight">
+        <h1 className="text-4xl md:text-6xl font-display text-terracotta mb-16 tracking-tight text-center">
           Who's cooking today?
         </h1>
 
@@ -90,17 +88,17 @@ export default function ProfileSelectionPage() {
             />
           ))}
 
-          {/* Add Profile Button (Visible only if not too many profiles? For now always) */}
+          {/* Add Profile Button */}
           <motion.div
              variants={{ hidden: { opacity: 0, scale: 0.9 }, show: { opacity: 1, scale: 1 } }}
-             whileHover={{ scale: 1.1 }}
+             whileHover={{ scale: 1.05, y: -5 }}
              whileTap={{ scale: 0.95 }}
-             className="flex flex-col items-center gap-3 cursor-pointer group"
+             className="flex flex-col items-center gap-4 cursor-pointer group"
           >
-             <div className="w-24 h-24 md:w-32 md:h-32 rounded-full flex items-center justify-center border-2 border-white/20 hover:bg-white/10 hover:border-white transition-all">
-                <PlusCircle className="text-gray-400 group-hover:text-white w-12 h-12" />
+             <div className="w-24 h-24 md:w-32 md:h-32 rounded-full flex items-center justify-center border-2 border-warm-gray-light bg-white hover:border-terracotta/50 hover:bg-white shadow-sm hover:shadow-md transition-all">
+                <PlusCircle className="text-warm-gray group-hover:text-terracotta w-10 h-10 transition-colors" />
              </div>
-             <span className="text-gray-400 font-display text-lg group-hover:text-white transition-colors">
+             <span className="text-warm-gray font-display text-xl group-hover:text-terracotta transition-colors">
                 Add Profile
              </span>
           </motion.div>
@@ -111,7 +109,7 @@ export default function ProfileSelectionPage() {
             animate={{ opacity: 1 }}
             transition={{ delay: 1 }}
             onClick={() => setIsManageMode(!isManageMode)}
-            className={`mt-16 px-6 py-2 border border-white/30 text-white/50 hover:text-white hover:border-white uppercase tracking-widest text-sm transition-colors ${isManageMode ? 'bg-white text-black hover:text-black hover:bg-white/90 border-transparent' : ''}`}
+            className={`mt-20 px-8 py-2.5 border border-warm-gray-light text-mocha hover:text-espresso hover:border-espresso uppercase tracking-widest text-sm font-semibold transition-all rounded-full ${isManageMode ? 'bg-espresso text-white hover:text-white hover:bg-espresso/90 border-transparent shadow-lg' : ''}`}
         >
             {isManageMode ? "Done" : "Manage Profiles"}
         </motion.button>

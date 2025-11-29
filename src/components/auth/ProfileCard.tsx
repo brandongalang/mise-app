@@ -19,29 +19,31 @@ export function ProfileCard({ profile, onClick, isManaging = false }: ProfileCar
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
-      whileHover={{ scale: 1.1, y: -5 }}
+      whileHover={{ scale: 1.05, y: -5 }}
       whileTap={{ scale: 0.95 }}
-      transition={{ type: "spring", stiffness: 300, damping: 20 }}
-      className="flex flex-col items-center gap-3 cursor-pointer group"
+      transition={{ type: "spring", stiffness: 300, damping: 25 }}
+      className="flex flex-col items-center gap-4 cursor-pointer group"
       onClick={() => onClick(profile)}
     >
       <div className="relative">
-        <Avatar
-            color={profile.avatarColor}
-            size="lg"
-            locked={hasPin && !isManaging}
-            className="border-2 border-transparent group-hover:border-white/20 transition-colors"
-        />
+        <div className="rounded-full p-1 border-2 border-transparent group-hover:border-terracotta/30 transition-all duration-300">
+          <Avatar
+              color={profile.avatarColor}
+              size="lg"
+              locked={hasPin && !isManaging}
+              className="shadow-md group-hover:shadow-lg transition-shadow"
+          />
+        </div>
 
         {/* Manage Overlay */}
         {isManaging && (
-            <div className="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center">
-                <Pencil className="text-white w-8 h-8" />
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] rounded-full flex items-center justify-center m-1">
+                <Pencil className="text-white w-8 h-8 drop-shadow-md" />
             </div>
         )}
       </div>
 
-      <span className="text-gray-300 font-display text-lg group-hover:text-white transition-colors">
+      <span className="text-espresso/80 font-display text-xl group-hover:text-terracotta transition-colors font-medium">
         {profile.displayName}
       </span>
     </motion.div>

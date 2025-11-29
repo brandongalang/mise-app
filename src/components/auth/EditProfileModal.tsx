@@ -36,54 +36,53 @@ export function EditProfileModal({ isOpen, onClose, profile, onSave, onDelete }:
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-      <div className="bg-[#1a1a1a] border border-white/10 w-full max-w-lg p-8 rounded-2xl shadow-2xl relative">
+    <div className="fixed inset-0 bg-ivory/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+      <div className="bg-white border border-parchment w-full max-w-lg p-8 rounded-2xl shadow-xl relative card-elevated">
         <button
             onClick={onClose}
-            className="absolute top-4 right-4 text-white/50 hover:text-white"
+            className="absolute top-4 right-4 text-warm-gray hover:text-espresso transition-colors"
         >
-            <X />
+            <X size={20} />
         </button>
 
-        <h2 className="text-2xl font-display text-white mb-8 border-b border-white/10 pb-4">
+        <h2 className="text-2xl font-display text-espresso mb-8 border-b border-parchment pb-4">
             Edit Profile
         </h2>
 
         <div className="flex flex-col md:flex-row gap-8">
             {/* Avatar Preview */}
             <div className="flex flex-col items-center gap-4">
-                <Avatar color={color} size="xl" />
+                <Avatar color={color} size="xl" className="shadow-lg" />
             </div>
 
             {/* Form */}
             <div className="flex-1 space-y-6">
                 <div>
-                    <label className="block text-sm text-gray-400 mb-2">Name</label>
+                    <label className="block text-sm font-semibold text-mocha mb-2">Name</label>
                     <input
                         type="text"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        className="w-full bg-[#333] border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-white/50"
+                        className="w-full bg-warm-white border border-warm-gray-light rounded-lg px-4 py-3 text-espresso focus:outline-none focus:ring-2 focus:ring-terracotta/20 focus:border-terracotta transition-all"
                     />
                 </div>
 
                 <div>
-                    <label className="block text-sm text-gray-400 mb-2">Color</label>
+                    <label className="block text-sm font-semibold text-mocha mb-2">Color</label>
                     <div className="flex gap-3">
                         {COLORS.map((c) => (
                             <button
                                 key={c}
                                 onClick={() => setColor(c)}
-                                className={`w-8 h-8 rounded-full ${c === color ? 'ring-2 ring-white scale-110' : 'opacity-70 hover:opacity-100'}`}
-                                style={{ backgroundColor: getComputedStyle(document.documentElement).getPropertyValue(`--color-${c}`) }} // Fallback or use class
+                                className={`w-8 h-8 rounded-full transition-all ${c === color ? 'ring-2 ring-terracotta ring-offset-2 scale-110' : 'opacity-70 hover:opacity-100 hover:scale-105'}`}
                             >
-                                <div className={`w-full h-full rounded-full ${getColorClass(c)}`}></div>
+                                <div className={`w-full h-full rounded-full ${getColorClass(c)} shadow-sm`}></div>
                             </button>
                         ))}
                     </div>
                 </div>
 
-                <div className="pt-6 flex justify-between items-center border-t border-white/10 mt-6">
+                <div className="pt-6 flex justify-between items-center border-t border-parchment mt-6">
                     <button
                         onClick={() => {
                             if (confirm("Are you sure you want to delete this profile?")) {
@@ -91,16 +90,16 @@ export function EditProfileModal({ isOpen, onClose, profile, onSave, onDelete }:
                                 onClose();
                             }
                         }}
-                        className="text-red-400 hover:text-red-300 text-sm font-semibold flex items-center gap-2"
+                        className="text-cayenne hover:text-red-700 text-sm font-semibold flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-red-50 transition-colors"
                     >
                        <Trash2 size={16} /> Delete
                     </button>
 
                     <button
                         onClick={handleSave}
-                        className="bg-white text-black px-6 py-2 rounded-full font-bold hover:scale-105 transition-transform"
+                        className="bg-espresso text-white px-6 py-2 rounded-full font-bold hover:bg-terracotta transition-colors shadow-md hover:shadow-lg transform active:scale-95 duration-200"
                     >
-                        Save
+                        Save Changes
                     </button>
                 </div>
             </div>
