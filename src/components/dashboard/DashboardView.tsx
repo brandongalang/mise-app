@@ -8,6 +8,7 @@ import { InventoryItem } from '@/components/inventory/InventoryItem';
 import { IngredientCategory, InventoryItem as IInventoryItem } from '@/lib/types';
 import { ScanLine, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { ProfileSwitcher } from '@/components/profiles/ProfileSwitcher';
 
 interface DashboardViewProps {
     onScan: () => void;
@@ -81,8 +82,12 @@ export function DashboardView({ onScan }: DashboardViewProps) {
                         </motion.p>
                     </div>
 
-                    {/* Scan Button */}
-                    <motion.button
+                    <div className="flex items-center gap-3">
+                        {/* Profile Switcher */}
+                        <ProfileSwitcher />
+
+                        {/* Scan Button */}
+                        <motion.button
                         onClick={onScan}
                         className="relative group"
                         whileTap={{ scale: 0.95 }}
@@ -98,6 +103,7 @@ export function DashboardView({ onScan }: DashboardViewProps) {
                             <span className="text-sm font-semibold">Scan</span>
                         </div>
                     </motion.button>
+                    </div>
                 </div>
             </header>
 
