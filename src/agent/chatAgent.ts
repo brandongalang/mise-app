@@ -62,7 +62,7 @@ Use markdown formatting for better readability when appropriate (lists, bold, he
 
 // Define the chat signature with functions - use simple signature, set instruction separately
 const chatSignature = ax(
-  `userMessage:string, conversationContext?:string, hasImage?:boolean -> response:string`,
+  `userMessage:string, conversationContext?:string, hasImage?:boolean -> assistantResponse:string`,
   { functions: inventoryTools }
 );
 chatSignature.setInstruction(SYSTEM_PROMPT);
@@ -158,7 +158,7 @@ export async function runChatAgent(input: ChatAgentInput): Promise<ChatAgentResu
 
   // Create signature with wrapped tools
   const wrappedSignature = ax(
-    `userMessage:string, conversationContext?:string, hasImage?:boolean -> response:string`,
+    `userMessage:string, conversationContext?:string, hasImage?:boolean -> assistantResponse:string`,
     { functions: wrappedTools }
   );
   wrappedSignature.setInstruction(SYSTEM_PROMPT);
@@ -171,7 +171,7 @@ export async function runChatAgent(input: ChatAgentInput): Promise<ChatAgentResu
   });
 
   return {
-    response: result.response,
+    response: result.assistantResponse,
     toolEvents,
   };
 }
@@ -254,7 +254,7 @@ export async function* streamChatAgent(
 
   try {
     const wrappedSignature = ax(
-      `userMessage:string, conversationContext?:string, hasImage?:boolean -> response:string`,
+      `userMessage:string, conversationContext?:string, hasImage?:boolean -> assistantResponse:string`,
       { functions: wrappedTools }
     );
     wrappedSignature.setInstruction(SYSTEM_PROMPT);
@@ -273,7 +273,7 @@ export async function* streamChatAgent(
       }
 
       // Stream the response tokens - use partial for accumulated value
-      const partialResponse = chunk.partial?.response || chunk.delta?.response;
+      const partialResponse = chunk.partial?.assistantResponse || chunk.delta?.assistantResponse;
       if (partialResponse && typeof partialResponse === "string") {
         // ax streams the full value each time, so we need to track what's new
         const newContent = partialResponse.slice(tokenIndex);
