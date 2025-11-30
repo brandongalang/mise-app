@@ -10,14 +10,14 @@ import { ToolCallsContainer } from './ToolCall';
 import { RecipeCard } from '@/lib/types';
 import { InventorySheet } from '@/components/inventory/InventorySheet';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChefHat, Sparkles } from 'lucide-react';
+import { ChefHat, Sparkles, AlertCircle, X } from 'lucide-react';
 
 interface ChatContainerProps {
     className?: string;
 }
 
 export function ChatContainer({ className }: ChatContainerProps) {
-    const { messages, isThinking, isStreaming, thinkingText, activeTools, sendMessage } = useChat();
+    const { messages, isThinking, isStreaming, thinkingText, activeTools, error, sendMessage, clearError } = useChat();
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const chatInputRef = useRef<ChatInputHandle>(null);
     const [isInventoryOpen, setIsInventoryOpen] = useState(false);
@@ -47,6 +47,27 @@ export function ChatContainer({ className }: ChatContainerProps) {
 
     return (
         <div className={`flex flex-col h-full bg-ivory ${className}`}>
+            {/* Error Banner */}
+            <AnimatePresence>
+                {error && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        className="bg-cayenne/10 border-b border-cayenne/20 px-4 py-3 flex items-center gap-3"
+                    >
+                        <AlertCircle className="w-5 h-5 text-cayenne flex-shrink-0" />
+                        <p className="text-sm text-cayenne flex-1">{error}</p>
+                        <button
+                            onClick={clearError}
+                            className="p-1 rounded-full hover:bg-cayenne/10 transition-colors"
+                        >
+                            <X className="w-4 h-4 text-cayenne" />
+                        </button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* Messages Area */}
             <div className="flex-1 overflow-y-auto custom-scrollbar">
                 <AnimatePresence mode="wait">

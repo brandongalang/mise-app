@@ -15,7 +15,7 @@ export function MainLayout({ children, activeTab, onTabChange }: MainLayoutProps
             {/* Subtle warm gradient overlay */}
             <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-parchment/30 pointer-events-none" />
 
-            <main className="flex-1 overflow-hidden relative z-0">
+            <main className="flex-1 overflow-hidden relative z-10">
                 {children}
             </main>
 
