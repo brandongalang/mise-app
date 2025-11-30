@@ -32,7 +32,7 @@ export const QuickActionChips = React.memo(function QuickActionChips({ onAction,
                         transition={{ duration: 0.3, delay: index * 0.1 }}
                         whileTap={{ scale: 0.97 }}
                     >
-                        <action.icon size={18} className={action.iconColor} />
+                        <action.icon size={18} className={action.iconColor} aria-hidden="true" />
                         <span>{action.label}</span>
                     </motion.button>
                 ))}

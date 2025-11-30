@@ -109,9 +109,10 @@ export function DashboardView({ onScan, onTabChange }: DashboardViewProps) {
                 <motion.button
                     onClick={onScan}
                     whileTap={{ scale: 0.97 }}
-                    className="flex flex-col items-center justify-center p-4 bg-espresso text-cream rounded-2xl shadow-lg gap-2"
+                    className="flex flex-col items-center justify-center p-4 bg-espresso text-cream rounded-2xl shadow-lg gap-2 focus:outline-none focus:ring-2 focus:ring-terracotta/50 focus:ring-offset-2"
+                    aria-label="Scan Receipt"
                 >
-                    <ScanLine className="w-6 h-6" />
+                    <ScanLine className="w-6 h-6" aria-hidden="true" />
                     <span className="font-medium text-sm">Scan Receipt</span>
                 </motion.button>
 
@@ -121,9 +122,10 @@ export function DashboardView({ onScan, onTabChange }: DashboardViewProps) {
                         sendMessage("What should I cook based on my expiring ingredients?");
                     }}
                     whileTap={{ scale: 0.97 }}
-                    className="flex flex-col items-center justify-center p-4 bg-terracotta text-white rounded-2xl shadow-lg gap-2"
+                    className="flex flex-col items-center justify-center p-4 bg-terracotta text-white rounded-2xl shadow-lg gap-2 focus:outline-none focus:ring-2 focus:ring-terracotta/50 focus:ring-offset-2"
+                    aria-label="Suggest Meal based on expiring ingredients"
                 >
-                    <ChefHat className="w-6 h-6" />
+                    <ChefHat className="w-6 h-6" aria-hidden="true" />
                     <span className="font-medium text-sm">Suggest Meal</span>
                 </motion.button>
             </div>

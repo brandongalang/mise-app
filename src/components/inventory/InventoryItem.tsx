@@ -66,13 +66,14 @@ export const InventoryItem = React.memo(function InventoryItem({ item, onTap, co
     const categoryColor = CATEGORY_COLORS[category] || 'bg-parchment text-latte';
 
     return (
-        <div
+        <button
             onClick={onTap}
             className={cn(
-                "group card-elevated card-interactive cursor-pointer overflow-hidden",
+                "group card-elevated card-interactive cursor-pointer overflow-hidden w-full text-left relative focus:outline-none focus:ring-2 focus:ring-terracotta/50 focus:ring-offset-2 rounded-2xl",
                 expiryConfig.bg,
                 compact ? "p-3" : "p-4"
             )}
+            aria-label={`${item.name}, ${item.remainingQty} ${item.unit}, ${expiryConfig.label}`}
         >
             <div className="flex items-center gap-3">
                 {/* Category Icon */}
@@ -80,7 +81,7 @@ export const InventoryItem = React.memo(function InventoryItem({ item, onTap, co
                     "flex-shrink-0 rounded-xl flex items-center justify-center",
                     categoryColor,
                     compact ? "w-10 h-10" : "w-12 h-12"
-                )}>
+                )} aria-hidden="true">
                     <Icon className={compact ? "w-5 h-5" : "w-6 h-6"} />
                 </div>
 
@@ -98,9 +99,9 @@ export const InventoryItem = React.memo(function InventoryItem({ item, onTap, co
                         <div className={cn(
                             "flex items-center gap-1.5 flex-shrink-0",
                             expiryConfig.text
-                        )}>
+                        )} aria-label={`Expires in ${expiryConfig.label}`}>
                             <div className={cn("status-dot", expiryConfig.dot)} />
-                            <span className="text-xs font-bold">{expiryConfig.label}</span>
+                            <span className="text-xs font-bold" aria-hidden="true">{expiryConfig.label}</span>
                         </div>
                     </div>
 
@@ -114,11 +115,11 @@ export const InventoryItem = React.memo(function InventoryItem({ item, onTap, co
                         </div>
 
                         {/* Chevron on hover */}
-                        <ChevronRight className="w-4 h-4 text-warm-gray-light opacity-0 group-hover:opacity-100 transition-opacity -mr-1" />
+                        <ChevronRight className="w-4 h-4 text-warm-gray-light opacity-0 group-hover:opacity-100 transition-opacity -mr-1" aria-hidden="true" />
                     </div>
 
                 </div>
             </div>
-        </div>
+        </button>
     );
 });

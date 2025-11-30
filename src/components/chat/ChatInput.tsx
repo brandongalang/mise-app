@@ -186,6 +186,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                         disabled={disabled}
                         whileTap={{ scale: 0.9 }}
                         title="Take photo"
+                        aria-label="Take photo"
                     >
                         <Camera size={22} strokeWidth={1.5} />
                     </motion.button>
@@ -200,6 +201,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                         disabled={disabled}
                         whileTap={{ scale: 0.9 }}
                         title="Upload image"
+                        aria-label="Upload image"
                     >
                         <ImagePlus size={22} strokeWidth={1.5} />
                     </motion.button>
@@ -210,6 +212,8 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                         className="hidden"
                         accept="image/*"
                         onChange={handleFileSelect}
+                        aria-hidden="true"
+                        tabIndex={-1}
                     />
 
                     {/* Text Input */}
@@ -228,6 +232,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                             "resize-none text-base text-espresso",
                             "placeholder:text-warm-gray-light"
                         )}
+                        aria-label="Message input"
                     />
 
                     {/* Send Button */}
@@ -245,6 +250,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                             scale: hasContent ? 1 : 0.95,
                             opacity: hasContent ? 1 : 0.5
                         }}
+                        aria-label="Send message"
                     >
                         <Send
                             size={20}
@@ -260,10 +266,10 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                 <p className="text-center text-xs text-warm-gray mt-2">
                     Press Enter to send • Shift+Enter for new line
                 </p>
-            </div>
+            </div >
 
             {/* Camera Capture Modal */}
-            <CameraCapture
+            < CameraCapture
                 isOpen={isCameraOpen}
                 onClose={() => setIsCameraOpen(false)}
                 onCapture={handleCameraCapture}
