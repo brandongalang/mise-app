@@ -17,8 +17,8 @@ const tabs = [
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
     return (
         <div className="relative z-0">
-            {/* Frosted glass navigation */}
-            <nav className="glass border-t border-clay/10 pb-safe-bottom">
+            {/* Navigation Bar */}
+            <nav className="bg-cream/80 backdrop-blur-md border-t border-clay/10 pb-safe-bottom">
                 <div className="flex justify-around items-center h-16 px-4">
                     {tabs.map((tab) => {
                         const isActive = activeTab === tab.id;
@@ -30,7 +30,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
                                 onClick={() => onTabChange(tab.id)}
                                 className={cn(
                                     "relative flex flex-col items-center justify-center w-full h-full space-y-1 transition-all duration-200",
-                                    "focus:outline-none focus-visible:ring-2 focus-visible:ring-terracotta/50 focus-visible:ring-offset-2 rounded-lg"
+                                    "focus:outline-none focus-visible:ring-2 focus-visible:ring-clay/50 focus-visible:ring-offset-2 rounded-lg"
                                 )}
                             >
                                 {/* Icon container with animated background */}
@@ -38,7 +38,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
                                     {isActive && (
                                         <motion.div
                                             layoutId="navIndicator"
-                                            className="absolute -inset-2 bg-terracotta/10 rounded-xl"
+                                            className="absolute -inset-2 bg-clay/10 rounded-xl"
                                             initial={false}
                                             transition={{
                                                 type: "spring",
@@ -50,7 +50,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
                                     <Icon
                                         className={cn(
                                             "relative w-6 h-6 transition-colors duration-200",
-                                            isActive ? "text-terracotta" : "text-warm-gray"
+                                            isActive ? "text-clay" : "text-warm-gray"
                                         )}
                                         strokeWidth={isActive ? 2 : 1.5}
                                     />
@@ -59,8 +59,8 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
                                 {/* Label */}
                                 <span
                                     className={cn(
-                                        "text-xs font-medium transition-colors duration-200",
-                                        isActive ? "text-terracotta" : "text-warm-gray"
+                                        "text-xs font-medium transition-colors duration-200 font-body",
+                                        isActive ? "text-clay" : "text-warm-gray"
                                     )}
                                 >
                                     {tab.label}
@@ -70,7 +70,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
                                 {isActive && (
                                     <motion.div
                                         layoutId="activeDot"
-                                        className="absolute -bottom-0.5 w-1 h-1 bg-terracotta rounded-full"
+                                        className="absolute -bottom-0.5 w-1 h-1 bg-clay rounded-full"
                                         initial={{ scale: 0 }}
                                         animate={{ scale: 1 }}
                                         transition={{
