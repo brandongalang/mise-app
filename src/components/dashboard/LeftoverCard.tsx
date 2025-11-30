@@ -21,18 +21,18 @@ export function LeftoverCard({ item, onTap }: LeftoverCardProps) {
     return (
         <motion.div
             onClick={onTap}
-            className="flex-shrink-0 cursor-pointer"
+            className="flex-shrink-0 cursor-pointer h-full"
             whileHover={{ scale: 1.03, rotate: 0 }}
             whileTap={{ scale: 0.98 }}
             style={{ rotate: rotation }}
         >
             <div className={cn(
-                "w-36 bg-warm-white rounded-sm shadow-md overflow-hidden transition-shadow hover:shadow-lg",
+                "bg-warm-white rounded-sm shadow-md overflow-hidden transition-shadow hover:shadow-lg h-full flex flex-col",
                 "border border-clay/10"
             )}>
                 {/* Image area */}
                 <div className={cn(
-                    "h-24 flex items-center justify-center relative",
+                    "h-24 flex-shrink-0 flex items-center justify-center relative",
                     isUrgent
                         ? "bg-gradient-to-br from-cayenne/10 to-cayenne/5"
                         : isWarning
@@ -60,10 +60,10 @@ export function LeftoverCard({ item, onTap }: LeftoverCardProps) {
                 </div>
 
                 {/* Caption area - Polaroid style */}
-                <div className="p-3 pt-2">
+                <div className="p-3 pt-2 flex-1 flex flex-col">
                     {/* Days badge */}
                     <div className={cn(
-                        "inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full mb-2",
+                        "inline-flex items-center self-start gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full mb-2",
                         isUrgent
                             ? "bg-cayenne/10 text-cayenne"
                             : isWarning
@@ -75,12 +75,12 @@ export function LeftoverCard({ item, onTap }: LeftoverCardProps) {
                     </div>
 
                     {/* Name - handwritten style */}
-                    <h4 className="font-accent text-lg text-espresso leading-tight truncate">
+                    <h4 className="font-accent text-lg text-espresso leading-tight line-clamp-2 mb-auto">
                         {item.name}
                     </h4>
 
                     {/* Quantity */}
-                    <div className="flex items-center gap-1 mt-1 text-xs text-latte">
+                    <div className="flex items-center gap-1 mt-2 text-xs text-latte">
                         <Utensils className="w-3 h-3" />
                         <span>{item.quantity || item.remainingQty} {item.unit}</span>
                     </div>

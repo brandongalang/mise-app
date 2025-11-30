@@ -1,22 +1,43 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useInventory } from '@/hooks/useInventory';
 import { EatFirstSection } from './EatFirstSection';
+import { LeftoversGrid } from './LeftoversGrid';
 import { CategoryTabs } from '@/components/inventory/CategoryTabs';
 import { InventoryItem } from '@/components/inventory/InventoryItem';
 import { IngredientCategory, InventoryItem as IInventoryItem } from '@/lib/types';
-import { ScanLine, Sparkles } from 'lucide-react';
+import { ScanLine, Sparkles, ChefHat, ShoppingCart } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { ProfileSwitcher } from '@/components/profiles/ProfileSwitcher';
+import { useChat } from '@/hooks/useChat'; // Hook to open chat interactions
 
 interface DashboardViewProps {
     onScan: () => void;
+    onTabChange: (tab: 'kitchen' | 'assistant') => void; // Added to switch tabs
 }
 
-export function DashboardView({ onScan }: DashboardViewProps) {
-    const { summary, isLoading, error } = useInventory();
+export function DashboardView({ onScan, onTabChange }: DashboardViewProps) {
+    const { summary, isLoading, error, fetchExpiringItems, fetchLeftovers } = useInventory();
+    const { sendMessage } = useChat();
     const [activeCategory, setActiveCategory] = useState<IngredientCategory | 'all'>('all');
+    
+    // Local state for focused items (fetched client-side on mount)
+    const [expiringItems, setExpiringItems] = useState<IInventoryItem[]>([]);
+    const [leftovers, setLeftovers] = useState<IInventoryItem[]>([]);
+
+    // Fetch focused data on mount
+    useEffect(() => {
+        const loadFocusedData = async () => {
+             const [exp, left] = await Promise.all([
+                 fetchExpiringItems(),
+                 fetchLeftovers()
+             ]);
+             setExpiringItems(exp);
+             setLeftovers(left);
+        };
+        loadFocusedData();
+    }, [fetchExpiringItems, fetchLeftovers]);
 
     if (isLoading) {
         return (
@@ -44,8 +65,9 @@ export function DashboardView({ onScan }: DashboardViewProps) {
     }
 
     const handleItemTap = (item: IInventoryItem) => {
-        console.log('Tapped item:', item);
-        // TODO: Open item details/edit sheet
+        // Interaction: Ask chat about this item
+        onTabChange('assistant');
+        sendMessage(`What can I cook with ${item.name}?`);
     };
 
     const getFilteredItems = () => {
@@ -83,34 +105,46 @@ export function DashboardView({ onScan }: DashboardViewProps) {
                     </div>
 
                     <div className="flex items-center gap-3">
-                        {/* Profile Switcher */}
-                        <ProfileSwitcher />
-
-                        {/* Scan Button */}
-                        <motion.button
-                        onClick={onScan}
-                        className="relative group"
-                        whileTap={{ scale: 0.95 }}
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ duration: 0.3, delay: 0.2 }}
-                    >
-                        {/* Glow effect */}
-                        <div className="absolute inset-0 bg-terracotta/20 rounded-full blur-lg opacity-0 group-hover:opacity-100 transition-opacity" />
-
-                        <div className="relative flex items-center gap-2 px-4 py-2.5 bg-espresso text-cream rounded-full shadow-lg hover:bg-espresso/90 transition-colors">
-                            <ScanLine className="w-5 h-5" />
-                            <span className="text-sm font-semibold">Scan</span>
-                        </div>
-                    </motion.button>
+                         {/* Placeholder for Profile Switcher if needed, or keep in Header component */}
                     </div>
                 </div>
             </header>
 
-            {/* Eat First Section (Leftovers & Expiring) */}
+            {/* Quick Actions */}
+            <div className="px-5 py-4 grid grid-cols-2 gap-3">
+                 <motion.button
+                    onClick={onScan}
+                    whileTap={{ scale: 0.97 }}
+                    className="flex flex-col items-center justify-center p-4 bg-espresso text-cream rounded-2xl shadow-lg gap-2"
+                 >
+                    <ScanLine className="w-6 h-6" />
+                    <span className="font-medium text-sm">Scan Receipt</span>
+                 </motion.button>
+
+                 <motion.button
+                    onClick={() => {
+                        onTabChange('assistant');
+                        sendMessage("What should I cook based on my expiring ingredients?");
+                    }}
+                    whileTap={{ scale: 0.97 }}
+                    className="flex flex-col items-center justify-center p-4 bg-terracotta text-white rounded-2xl shadow-lg gap-2"
+                 >
+                    <ChefHat className="w-6 h-6" />
+                    <span className="font-medium text-sm">Suggest Meal</span>
+                 </motion.button>
+            </div>
+
+
+            {/* Eat First Section (Expiring Soon) */}
             <EatFirstSection
-                leftovers={summary.leftovers}
-                expiringSoon={summary.expiringSoon}
+                leftovers={[]} // We display leftovers in their own grid now, unless urgent? Let's just use EatFirst for expiring items mainly
+                expiringSoon={expiringItems} 
+                onItemTap={handleItemTap}
+            />
+
+            {/* Leftovers Grid */}
+            <LeftoversGrid 
+                leftovers={leftovers}
                 onItemTap={handleItemTap}
             />
 

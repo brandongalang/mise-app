@@ -22,7 +22,7 @@ export default function Home() {
       */}
 
       <div className={activeTab === 'kitchen' ? 'block h-full' : 'hidden h-full'}>
-        <DashboardView onScan={handleScan} />
+        <DashboardView onScan={handleScan} onTabChange={setActiveTab} />
       </div>
 
       <div className={activeTab === 'assistant' ? 'block h-full' : 'hidden h-full'}>
