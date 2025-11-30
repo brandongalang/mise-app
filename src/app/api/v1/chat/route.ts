@@ -3,16 +3,19 @@ import { streamChatAgent } from "@/agent/chatAgent";
 
 export const maxDuration = 60; // Allow up to 60 seconds for tool execution
 
+interface Attachment {
+  type: "image";
+  data: string; // base64
+  mimeType: string;
+}
+
 interface ChatRequest {
   message: string | null;
-  attachments?: Array<{
-    type: "image";
-    data: string; // base64
-    mimeType: string;
-  }>;
+  attachments?: Attachment[];
   conversationHistory?: Array<{
     role: "user" | "assistant";
     content: string;
+    attachments?: Attachment[];
   }>;
 }
 

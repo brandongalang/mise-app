@@ -1,9 +1,47 @@
-import { pgTable, text, integer, real, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, real, timestamp, uuid, boolean } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
+
+// ============================================
+// MULTI-TENANT: Households & Profiles
+// ============================================
+
+// Households - top-level tenant (1 Auth User = 1 Household)
+export const households = pgTable("households", {
+  id: uuid("id").primaryKey(), // Matches auth.users.id
+  name: text("name").notNull().default("My Household"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Profiles - users within a household (Netflix-style)
+export const profiles = pgTable("profiles", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  householdId: uuid("household_id").notNull().references(() => households.id, { onDelete: 'cascade' }),
+  displayName: text("display_name").notNull(),
+  avatarColor: text("avatar_color").notNull().default("terracotta"),
+  pinHash: text("pin_hash"), // NULL = no PIN
+  isAdmin: boolean("is_admin").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Household relations
+export const householdsRelations = relations(households, ({ many }) => ({
+  profiles: many(profiles),
+  masterIngredients: many(masterIngredients),
+  containers: many(containers),
+}));
+
+// Profile relations
+export const profilesRelations = relations(profiles, ({ one }) => ({
+  household: one(households, {
+    fields: [profiles.householdId],
+    references: [households.id],
+  }),
+}));
 
 // Reference data - built dynamically by agent
 export const masterIngredients = pgTable("master_ingredients", {
   id: text("id").primaryKey(),
+  householdId: uuid("household_id").references(() => households.id, { onDelete: 'cascade' }),
   canonicalName: text("canonical_name").notNull(),
   category: text("category"), // produce, protein, dairy, pantry, frozen, beverage
   defaultUnit: text("default_unit"), // g, ml, count
@@ -13,14 +51,16 @@ export const masterIngredients = pgTable("master_ingredients", {
 
 export const ingredientAliases = pgTable("ingredient_aliases", {
   alias: text("alias").primaryKey(),
+  householdId: uuid("household_id").references(() => households.id, { onDelete: 'cascade' }),
   masterId: text("master_id").notNull().references(() => masterIngredients.id),
   source: text("source").default("agent"), // agent, user_correction
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Unit conversions - seeded, global only
+// Unit conversions - household-scoped
 export const globalUnitConversions = pgTable("global_unit_conversions", {
   id: text("id").primaryKey(), // composite key as single string: "from_unit:to_unit"
+  householdId: uuid("household_id").references(() => households.id, { onDelete: 'cascade' }),
   fromUnit: text("from_unit").notNull(),
   toUnit: text("to_unit").notNull(),
   factor: real("factor").notNull(),
@@ -29,6 +69,7 @@ export const globalUnitConversions = pgTable("global_unit_conversions", {
 // Inventory - core state
 export const containers = pgTable("containers", {
   id: text("id").primaryKey(),
+  householdId: uuid("household_id").references(() => households.id, { onDelete: 'cascade' }),
   masterId: text("master_id").references(() => masterIngredients.id),
   dishName: text("dish_name"), // for leftovers only
   cookedFromRecipeId: text("cooked_from_recipe_id"),
@@ -53,6 +94,7 @@ export const contents = pgTable("contents", {
 // Audit trail
 export const transactions = pgTable("transactions", {
   id: text("id").primaryKey(),
+  householdId: uuid("household_id").references(() => households.id, { onDelete: 'cascade' }),
   containerId: text("container_id").notNull().references(() => containers.id),
   operation: text("operation").notNull(), // ADD, DEDUCT, ADJUST, MERGE, DELETE, STATUS_CHANGE
   delta: real("delta"),
@@ -64,6 +106,7 @@ export const transactions = pgTable("transactions", {
 // Recipe history
 export const cookedRecipes = pgTable("cooked_recipes", {
   id: text("id").primaryKey(),
+  householdId: uuid("household_id").references(() => households.id, { onDelete: 'cascade' }),
   title: text("title").notNull(),
   ingredientsUsed: text("ingredients_used"), // JSON string
   leftoversCreatedId: text("leftovers_created_id").references(() => containers.id),
@@ -114,6 +157,10 @@ export const cookedRecipesRelations = relations(cookedRecipes, ({ one }) => ({
 }));
 
 // Type exports
+export type Household = typeof households.$inferSelect;
+export type NewHousehold = typeof households.$inferInsert;
+export type Profile = typeof profiles.$inferSelect;
+export type NewProfile = typeof profiles.$inferInsert;
 export type MasterIngredient = typeof masterIngredients.$inferSelect;
 export type NewMasterIngredient = typeof masterIngredients.$inferInsert;
 export type Container = typeof containers.$inferSelect;

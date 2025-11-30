@@ -1,0 +1,5 @@
+# Environment files - use Vercel Environment Variables instead
+.env
+.env.*
+.env.local
+.env.*.local

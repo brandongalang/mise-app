@@ -1,13 +1,35 @@
 import { ai, type AxChatResponse, type AxFunction } from "@ax-llm/ax";
 import { inventoryTools } from "./tools/definitions";
 
+// Multimodal content types for chat messages
+type TextContent = { type: "text"; text: string };
+type ImageUrlContent = {
+  type: "image_url";
+  image_url: {
+    url: string;
+    detail?: "high" | "low" | "auto";
+  };
+};
+
+type MessageContent = string | (TextContent | ImageUrlContent)[];
+
+interface ChatMessage {
+  role: "system" | "user" | "assistant";
+  content: MessageContent;
+}
+
 // Lazy-load OpenRouter client to avoid build-time initialization
 let _llm: ReturnType<typeof ai> | null = null;
 function getLlm() {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    throw new Error("OPENROUTER_API_KEY environment variable is not set");
+  }
+
   if (!_llm) {
     _llm = ai({
       name: "openrouter",
-      apiKey: process.env.OPENROUTER_API_KEY!,
+      apiKey,
       config: {
         model: "x-ai/grok-4-fast",
       },
@@ -19,7 +41,7 @@ function getLlm() {
 }
 
 // System instructions (set via setInstruction to avoid signature parsing issues)
-const SYSTEM_PROMPT = `You are Mise, a helpful kitchen assistant. Your role is to:
+const SYSTEM_PROMPT = `You are Mise, a helpful kitchen assistant with vision capabilities. Your role is to:
 - Help users manage their kitchen inventory using the available tools
 - Suggest recipes based on available ingredients
 - Provide cooking tips and techniques
@@ -29,64 +51,94 @@ const SYSTEM_PROMPT = `You are Mise, a helpful kitchen assistant. Your role is t
 REASONING APPROACH:
 Think step-by-step before acting. Consider what the user needs, what information you have, and which tools will help. If unsure, gather information first.
 
-IMAGE ANALYSIS (You are multimodal - you can see images directly!):
-When the user shares an image, analyze it and determine what action they likely want:
+RESPONSE FORMATTING (Important!):
+Use markdown strategically to make responses scannable and user-friendly:
+- Use **bold** for item names, quantities, and key actions
+- Use bullet lists for multiple items (not numbered unless order matters)
+- Use ### headers only for major sections (like "Items Found" or "Ready to Add")
+- Keep responses concise - avoid walls of text
+- Don't overuse formatting - plain text is fine for conversational responses
 
-1. RECEIPT PHOTO: Extract food items, ask user to confirm, then add to inventory
-   - Parse quantities like "24CT" (24 count), "1.5LB" (1.5 lb)
+IMAGE ANALYSIS - BE PROACTIVE ABOUT INVENTORY:
+When the user shares a food-related image, your PRIMARY goal is to help them track it in their inventory. Be proactive!
+
+1. GROCERIES/PRODUCE/FRIDGE PHOTO (Most Common):
+   Immediately identify items and PROACTIVELY suggest adding them:
+
+   Example response format:
+   "I can see some fresh groceries! Here's what I found:
+
+   ### Ready to Add
+   | Item | Qty | Unit | Category |
+   |------|-----|------|----------|
+   | **Broccoli** | 2 | heads | Produce |
+   | **Bell Peppers** | 3 | count | Produce |
+   | **Chicken Breast** | 1 | lb | Protein |
+
+   **Want me to add these to your inventory?** Just say 'yes' or let me know any changes!"
+
+2. RECEIPT PHOTO:
+   Parse items and suggest adding:
+   - Extract quantities like "24CT" → 24 count, "1.5LB" → 1.5 lb
    - Skip non-food items (bags, tax, totals)
-   - List what you found and ask "Would you like me to add these to your inventory?"
+   - Present in same table format, ask for confirmation
 
-2. GROCERIES/FRIDGE PHOTO: Identify visible food items, ask to add to inventory
-   - Estimate quantities based on what you see
-   - Categorize items (produce, protein, dairy, etc.)
-   - Ask before adding to inventory
+3. MEAL/RESTAURANT PHOTO:
+   This is likely NOT for inventory - but still offer options:
+   - Briefly compliment or describe the dish
+   - Ask: "Is this **leftovers to track**, or would you like a **recipe to recreate it**?"
+   - If leftovers: use addLeftover with portion estimates
+   - If recipe: offer to help using their current inventory
 
-3. MEAL/RESTAURANT PHOTO: This is likely NOT for inventory tracking!
-   - Compliment the meal, ask what they'd like to do
-   - Offer options: "Would you like me to suggest a similar recipe?" or "Is this a leftover you want to track?"
-   - If they confirm it's leftovers, use addLeftover with portion estimates
-   - If they want a recipe, offer to help them recreate it using their inventory
+4. COOKED DISH/LEFTOVERS:
+   Proactively offer to track:
+   "Looks delicious! Want me to **add this as leftovers**? I'd estimate about **2-3 portions** - let me know the actual amount and when you'd like to eat it by."
 
-4. COOKED DISH/LEFTOVERS: Ask if they want to track it
-   - Use addLeftover (not addInventory) for prepared dishes
-   - Ask about portion count and when it should be eaten by
-
-Always describe what you see in the image briefly, then ask what the user wants to do with it.
+PROACTIVE INVENTORY SUGGESTIONS:
+When showing items to add, ALWAYS:
+- Present items in a clear table or list with: **Name**, **Quantity**, **Unit**, **Category**
+- Provide your best estimates for quantities
+- Ask user to confirm OR modify before adding
+- Make it easy: "Say 'yes' to add all, or tell me what to change"
 
 READ BEFORE WRITE (Critical):
 ALWAYS search or check inventory BEFORE any add/update/deduct action to avoid duplicates:
 - Before addInventory: use searchInventory to check if item already exists
 - Before deductInventory: use searchInventory to verify item exists and has sufficient quantity
 - Before updateInventory: use searchInventory to confirm current state
-- If an item already exists, ask user if they want to add more to existing stock or update quantity
+- If item exists: "You already have **2 apples**. Want me to add these 3 more (total: 5)?"
 
 TOOL WORKFLOWS:
-- Adding groceries: searchInventory (check existing) then addInventory (only new items) or updateInventory (increase existing)
-- Using ingredients: searchInventory (verify exists) then deductInventory
-- Recipe suggestions: getExpiringItems + searchInventory then generateRecipe
-- Leftovers: addLeftover (these are unique dishes, no duplicate check needed)
+- Adding groceries: searchInventory (check existing) → addInventory (new) or updateInventory (existing)
+- Using ingredients: searchInventory (verify exists) → deductInventory
+- Image with groceries: Analyze → present table → wait for confirmation → searchInventory → add
+- Recipe suggestions: getExpiringItems + searchInventory → generateRecipe
+- Leftovers: addLeftover (unique dishes, no duplicate check needed)
 
 QUANTITY INTERPRETATION:
-- a couple means 2, a few means 3, some means estimate 4-5
-- Parse units: 2 lbs means 2 lb, dozen means 12 count
-- When unclear, ask for clarification
+- "a couple" = 2, "a few" = 3, "some" = 4-5
+- Parse units: "2 lbs" = 2 lb, "dozen" = 12 count
+- When unclear, provide your best estimate and ask user to confirm
 
 ERROR HANDLING:
-- If a tool returns an error or not found, explain clearly and suggest alternatives
-- If deduct fails due to insufficient quantity, show what is available
+- If a tool returns an error, explain clearly and suggest alternatives
+- If deduct fails: "You only have **1 egg** but need 3. Want to update your shopping list?"
 
-CONFIRMATIONS:
-- Confirm before bulk additions (more than 5 items)
-- Confirm before deleting items
-- After analyzing images, list what you found and ask for user approval before adding
+Be friendly, practical, and focused on helping them track and use their ingredients effectively.`;
 
-Be friendly, practical, and focused on helping them use their ingredients effectively.
-Use markdown formatting for better readability when appropriate (lists, bold, headers).`;
+interface HistoryAttachment {
+  type: "image";
+  data: string; // base64 or data URL
+  mimeType: string;
+}
 
 export interface ChatAgentInput {
   message: string;
-  conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
+  conversationHistory?: Array<{
+    role: "user" | "assistant";
+    content: string;
+    attachments?: HistoryAttachment[];
+  }>;
   imageBase64?: string;
   imageMimeType?: string;
 }
@@ -103,6 +155,39 @@ export interface ToolEvent {
 export interface ChatAgentResult {
   response: string;
   toolEvents: ToolEvent[];
+}
+
+/**
+ * Build a multimodal user message with text and optional image
+ */
+function buildUserMessage(
+  text: string,
+  imageBase64?: string,
+  imageMimeType?: string
+): MessageContent {
+  if (!imageBase64) {
+    return text || "What's in this image?";
+  }
+
+  // Ensure data URL format
+  let dataUrl = imageBase64;
+  if (!imageBase64.startsWith("data:")) {
+    dataUrl = `data:${imageMimeType || "image/jpeg"};base64,${imageBase64}`;
+  }
+
+  // Build multimodal content array with text and image
+  const content: (TextContent | ImageUrlContent)[] = [
+    { type: "text", text: text || "What's in this image?" },
+    {
+      type: "image_url",
+      image_url: {
+        url: dataUrl,
+        detail: "high", // Use high detail for better food/receipt analysis
+      },
+    },
+  ];
+
+  return content;
 }
 
 /**
@@ -152,44 +237,43 @@ export async function runChatAgent(input: ChatAgentInput): Promise<ChatAgentResu
     },
   }));
 
-  // Build chat messages for direct llm.chat() call
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const chatPrompt: any[] = [
+  // Build chat messages for direct llm.chat() call with multimodal support
+  const chatPrompt: ChatMessage[] = [
     { role: "system", content: SYSTEM_PROMPT },
   ];
 
-  // Add conversation history
+  // Add conversation history with multimodal support
   if (input.conversationHistory) {
     for (const msg of input.conversationHistory) {
-      chatPrompt.push({ role: msg.role, content: msg.content });
+      // Check if this history message has image attachments
+      const imageAttachment = msg.attachments?.find(a => a.type === "image");
+      if (imageAttachment && msg.role === "user") {
+        // Rebuild multimodal content for user messages with images
+        const historyContent = buildUserMessage(
+          msg.content,
+          imageAttachment.data,
+          imageAttachment.mimeType
+        );
+        chatPrompt.push({ role: msg.role, content: historyContent });
+      } else {
+        chatPrompt.push({ role: msg.role, content: msg.content });
+      }
     }
   }
 
-  // Add current user message - with image if present (multimodal)
-  const userMessage = input.message || "What's in this image?";
-
-  if (input.imageBase64) {
-    // Build multimodal content with image
-    const imageData = input.imageBase64.startsWith("data:")
-      ? input.imageBase64
-      : `data:${input.imageMimeType || "image/jpeg"};base64,${input.imageBase64}`;
-
-    chatPrompt.push({
-      role: "user",
-      content: [
-        { type: "text", text: userMessage },
-        { type: "image_url", image_url: { url: imageData } },
-      ],
-    });
-  } else {
-    chatPrompt.push({ role: "user", content: userMessage });
-  }
+  // Add current user message with multimodal content if image present
+  const userContent = buildUserMessage(
+    input.message,
+    input.imageBase64,
+    input.imageMimeType
+  );
+  chatPrompt.push({ role: "user", content: userContent });
 
   // Use direct llm.chat() - bypasses signature parsing
   const llm = getLlm();
   const response = await llm.chat(
     {
-      chatPrompt,
+      chatPrompt: chatPrompt as any, // Cast needed for multimodal content arrays
       functions: wrappedTools,
       functionCall: "auto",
     },
@@ -207,7 +291,7 @@ export async function runChatAgent(input: ChatAgentInput): Promise<ChatAgentResu
 
 /**
  * Stream the chat agent response with real-time tool events.
- * Yields events as they happen for SSE streaming.
+ * Uses native multimodal vision - sends images directly to the LLM.
  */
 export async function* streamChatAgent(
   input: ChatAgentInput
@@ -222,7 +306,10 @@ export async function* streamChatAgent(
   let toolCounter = 0;
   let tokenIndex = 0;
 
-  yield { type: "thinking", status: input.imageBase64 ? "Looking at your image..." : "Thinking..." };
+  yield {
+    type: "thinking",
+    status: input.imageBase64 ? "Looking at your image..." : "Thinking...",
+  };
 
   // Store tool events for yielding
   const pendingEvents: Array<
@@ -267,47 +354,44 @@ export async function* streamChatAgent(
   }));
 
   try {
-    // Build chat messages for direct llm.chat() call
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const chatPrompt: any[] = [
+    // Build chat messages with native multimodal support
+    const chatPrompt: ChatMessage[] = [
       { role: "system", content: SYSTEM_PROMPT },
     ];
 
-    // Add conversation history
+    // Add conversation history with multimodal support
     if (input.conversationHistory) {
       for (const msg of input.conversationHistory) {
-        chatPrompt.push({ role: msg.role, content: msg.content });
+        // Check if this history message has image attachments
+        const imageAttachment = msg.attachments?.find(a => a.type === "image");
+        if (imageAttachment && msg.role === "user") {
+          // Rebuild multimodal content for user messages with images
+          const historyContent = buildUserMessage(
+            msg.content,
+            imageAttachment.data,
+            imageAttachment.mimeType
+          );
+          chatPrompt.push({ role: msg.role, content: historyContent });
+        } else {
+          chatPrompt.push({ role: msg.role, content: msg.content });
+        }
       }
     }
 
-    // Add current user message - with image if present (multimodal)
-    const userMessage = input.message || "What's in this image?";
+    // Add current user message with multimodal content if image present
+    const userContent = buildUserMessage(
+      input.message,
+      input.imageBase64,
+      input.imageMimeType
+    );
+    chatPrompt.push({ role: "user", content: userContent });
 
-    if (input.imageBase64) {
-      // Build multimodal content with image
-      const imageData = input.imageBase64.startsWith("data:")
-        ? input.imageBase64
-        : `data:${input.imageMimeType || "image/jpeg"};base64,${input.imageBase64}`;
-
-      chatPrompt.push({
-        role: "user",
-        content: [
-          { type: "text", text: userMessage },
-          { type: "image_url", image_url: { url: imageData } },
-        ],
-      });
-    } else {
-      chatPrompt.push({ role: "user", content: userMessage });
-    }
-
-    // Use direct llm.chat() - bypasses signature parsing
+    // Use direct llm.chat() with multimodal support
     const llm = getLlm();
 
-    // Use non-streaming mode for simpler response handling
-    // Then stream character by character to the client
     const response = await llm.chat(
       {
-        chatPrompt,
+        chatPrompt: chatPrompt as any, // Cast needed for multimodal content arrays
         functions: wrappedTools,
         functionCall: "auto",
       },
@@ -337,14 +421,19 @@ export async function* streamChatAgent(
 
     yield { type: "complete", success: true };
   } catch (error) {
+    console.error("Chat agent error:", error);
+
     // Yield any pending events
     while (pendingEvents.length > 0) {
       yield pendingEvents.shift()!;
     }
 
+    const errorMessage = error instanceof Error ? error.message : "An error occurred";
+    console.error("Yielding error to client:", errorMessage);
+
     yield {
       type: "error",
-      message: error instanceof Error ? error.message : "An error occurred",
+      message: errorMessage,
     };
   }
 }

@@ -75,9 +75,11 @@ export function useChat(): UseChatReturn {
 
         try {
             // Use ref to get current messages for conversation history
+            // Include attachments so multimodal context is preserved across messages
             const conversationHistory = messagesRef.current.map(m => ({
                 role: m.role,
                 content: m.content,
+                attachments: m.attachments,
             }));
 
             const response = await fetch('/api/v1/chat', {
