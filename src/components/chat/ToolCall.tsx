@@ -22,8 +22,7 @@ import {
     ChevronRight,
 } from 'lucide-react';
 
-// Map tool names to icons and labels
-const TOOL_CONFIG: Record<string, { icon: typeof Search; label: string; color: string }> = {
+export const TOOL_CONFIG: Record<string, { icon: typeof Search; label: string; color: string }> = {
     searchInventory: { icon: Search, label: 'Searching inventory', color: 'text-olive' },
     addInventory: { icon: Plus, label: 'Adding to inventory', color: 'text-sage' },
     deductInventory: { icon: Minus, label: 'Deducting from inventory', color: 'text-marigold' },
@@ -34,6 +33,7 @@ const TOOL_CONFIG: Record<string, { icon: typeof Search; label: string; color: s
     resolveIngredient: { icon: FileText, label: 'Resolving ingredient', color: 'text-latte' },
     parseImage: { icon: Eye, label: 'Analyzing image', color: 'text-terracotta' },
     generateRecipe: { icon: ChefHat, label: 'Generating recipe', color: 'text-terracotta' },
+    proposeInventory: { icon: Eye, label: 'Found Items', color: 'text-terracotta' },
 };
 
 const DEFAULT_TOOL_CONFIG = {
