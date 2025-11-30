@@ -101,7 +101,7 @@ export function ChatContainer({ className, intent, onIntentHandled }: ChatContai
     const hasActiveTools = activeTools.length > 0;
 
     return (
-        <div className={`flex flex-col h-full bg-ivory ${className}`}>
+        <div className={`flex flex-col h-full bg-bg-primary ${className}`}>
             {/* Error Banner */}
             <AnimatePresence>
                 {error && (
@@ -137,16 +137,16 @@ export function ChatContainer({ className, intent, onIntentHandled }: ChatContai
                         >
                             {/* Animated icon */}
                             <motion.div
-                                className="relative mb-6"
+                                className="relative mb-8"
                                 initial={{ scale: 0.8, opacity: 0 }}
                                 animate={{ scale: 1, opacity: 1 }}
                                 transition={{ duration: 0.5, delay: 0.2 }}
                             >
-                                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-terracotta/20 to-marigold/20 flex items-center justify-center">
-                                    <ChefHat className="w-10 h-10 text-terracotta" strokeWidth={1.5} />
+                                <div className="w-24 h-24 rounded-3xl bg-bg-secondary shadow-lg flex items-center justify-center texture-paper border border-border-subtle">
+                                    <ChefHat className="w-12 h-12 text-terracotta" strokeWidth={1.5} />
                                 </div>
                                 <motion.div
-                                    className="absolute -top-1 -right-1"
+                                    className="absolute -top-2 -right-2"
                                     animate={{
                                         scale: [1, 1.2, 1],
                                         rotate: [0, 10, -10, 0]
@@ -157,7 +157,7 @@ export function ChatContainer({ className, intent, onIntentHandled }: ChatContai
                                         ease: "easeInOut"
                                     }}
                                 >
-                                    <Sparkles className="w-6 h-6 text-marigold" />
+                                    <Sparkles className="w-8 h-8 text-marigold" />
                                 </motion.div>
                             </motion.div>
 
@@ -166,18 +166,19 @@ export function ChatContainer({ className, intent, onIntentHandled }: ChatContai
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.5, delay: 0.3 }}
+                                className="space-y-3"
                             >
-                                <h2 className="font-display text-2xl font-bold text-espresso mb-2">
-                                    Welcome to Mise
+                                <h2 className="font-display text-4xl font-bold text-text-primary">
+                                    Mise
                                 </h2>
-                                <p className="text-latte max-w-xs mx-auto leading-relaxed">
-                                    Your kitchen companion. Scan receipts, track what's fresh, and discover what to cook.
+                                <p className="text-text-secondary max-w-xs mx-auto leading-relaxed font-body text-lg">
+                                    Your personal kitchen assistant.
                                 </p>
                             </motion.div>
 
                             {/* Decorative line */}
                             <motion.div
-                                className="mt-6 mb-2 w-12 h-0.5 rounded-full bg-gradient-to-r from-terracotta to-marigold"
+                                className="mt-8 mb-4 w-16 h-1 rounded-full bg-gradient-to-r from-terracotta to-marigold"
                                 initial={{ scaleX: 0 }}
                                 animate={{ scaleX: 1 }}
                                 transition={{ duration: 0.5, delay: 0.5 }}
@@ -185,18 +186,18 @@ export function ChatContainer({ className, intent, onIntentHandled }: ChatContai
 
                             {/* Hint text */}
                             <motion.p
-                                className="text-sm text-warm-gray font-accent text-lg"
+                                className="text-text-tertiary font-accent text-xl"
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                                 transition={{ duration: 0.5, delay: 0.6 }}
                             >
-                                Try asking "What's expiring soon?"
+                                "What's expiring soon?"
                             </motion.p>
                         </motion.div>
                     ) : (
                         <motion.div
                             key="messages"
-                            className="p-4 space-y-4"
+                            className="p-4 space-y-6"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                         >
@@ -240,7 +241,7 @@ export function ChatContainer({ className, intent, onIntentHandled }: ChatContai
                                     animate={{ opacity: 1, y: 0 }}
                                     className="flex gap-3"
                                 >
-                                    <div className="flex-shrink-0 w-8 h-8 rounded-xl bg-gradient-to-br from-terracotta/20 to-marigold/20 flex items-center justify-center">
+                                    <div className="flex-shrink-0 w-8 h-8 rounded-xl bg-bg-secondary flex items-center justify-center border border-border-subtle">
                                         <ChefHat className="w-4 h-4 text-terracotta" />
                                     </div>
                                     <div className="flex-1 max-w-[80%]">
@@ -267,9 +268,9 @@ export function ChatContainer({ className, intent, onIntentHandled }: ChatContai
             {/* Bottom Section - Quick Actions & Input */}
             <div className="relative z-10">
                 {/* Gradient fade */}
-                <div className="absolute -top-8 left-0 right-0 h-8 bg-gradient-to-t from-ivory to-transparent pointer-events-none" />
+                <div className="absolute -top-12 left-0 right-0 h-12 bg-gradient-to-t from-bg-primary to-transparent pointer-events-none" />
 
-                <div className="bg-ivory pt-2 pb-safe-bottom">
+                <div className="bg-bg-primary pt-2 pb-safe-bottom">
                     <AnimatePresence>
                         {messages.length === 0 && (
                             <motion.div

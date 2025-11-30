@@ -7,15 +7,14 @@ import { LeftoversGrid } from './LeftoversGrid';
 import { CategoryTabs } from '@/components/inventory/CategoryTabs';
 import { InventoryItem } from '@/components/inventory/InventoryItem';
 import { IngredientCategory, InventoryItem as IInventoryItem } from '@/lib/types';
-import { ScanLine, Sparkles, ChefHat, ShoppingCart } from 'lucide-react';
+import { ScanLine, Sparkles, ChefHat } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { ProfileSwitcher } from '@/components/profiles/ProfileSwitcher';
-import { useChat } from '@/hooks/useChat'; // Hook to open chat interactions
+import { useChat } from '@/hooks/useChat';
 import { DashboardSkeleton } from '@/components/skeletons/DashboardSkeleton';
 
 interface DashboardViewProps {
     onScan: () => void;
-    onTabChange: (tab: 'kitchen' | 'assistant') => void; // Added to switch tabs
+    onTabChange: (tab: 'kitchen' | 'assistant') => void;
 }
 
 export function DashboardView({ onScan, onTabChange }: DashboardViewProps) {
@@ -41,9 +40,7 @@ export function DashboardView({ onScan, onTabChange }: DashboardViewProps) {
     }, [fetchExpiringItems, fetchLeftovers]);
 
     if (isLoading) {
-        if (isLoading) {
-            return <DashboardSkeleton />;
-        }
+        return <DashboardSkeleton />;
     }
 
     if (error || !summary) {
@@ -53,7 +50,7 @@ export function DashboardView({ onScan, onTabChange }: DashboardViewProps) {
                     😕
                 </div>
                 <p className="font-medium">Failed to load inventory</p>
-                <p className="text-sm text-latte">Please try again later</p>
+                <p className="text-sm text-text-secondary">Please try again later</p>
             </div>
         );
     }
@@ -75,146 +72,159 @@ export function DashboardView({ onScan, onTabChange }: DashboardViewProps) {
     const totalItems = Object.values(summary.categories).reduce((acc, c) => acc + c.items.length, 0);
 
     return (
-        <div className="h-full overflow-y-auto bg-ivory custom-scrollbar pb-24">
+        <div className="h-full overflow-y-auto bg-bg-primary custom-scrollbar pb-24">
             {/* Editorial Header */}
-            <header className="sticky top-0 z-20 glass border-b border-clay/10">
-                <div className="px-5 py-4 flex items-center justify-between">
+            <header className="sticky top-0 z-20 glass border-b border-border-subtle">
+                <div className="px-5 py-6 flex items-end justify-between">
                     <div>
                         <motion.h1
-                            className="font-display text-2xl font-bold text-espresso tracking-tight"
+                            className="font-display text-4xl font-bold text-text-primary tracking-tight leading-none"
                             initial={{ opacity: 0, y: -10 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.4 }}
                         >
-                            My Kitchen
+                            Mise
                         </motion.h1>
                         <motion.p
-                            className="text-sm text-latte mt-0.5"
+                            className="text-sm font-body text-text-secondary mt-1 tracking-wide uppercase"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ duration: 0.4, delay: 0.1 }}
                         >
-                            {totalItems} items tracked
+                            Kitchen Assistant
                         </motion.p>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                        {/* Placeholder for Profile Switcher if needed, or keep in Header component */}
+                    <div className="text-right">
+                        <motion.p
+                            className="text-xs font-bold text-terracotta bg-terracotta/10 px-2 py-1 rounded-full border border-terracotta/20"
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ duration: 0.4, delay: 0.2 }}
+                        >
+                            {totalItems} ITEMS
+                        </motion.p>
                     </div>
                 </div>
             </header>
 
-            {/* Quick Actions */}
-            <div className="px-5 py-4 grid grid-cols-2 gap-3">
-                <motion.button
-                    onClick={onScan}
-                    whileTap={{ scale: 0.97 }}
-                    className="flex flex-col items-center justify-center p-4 bg-espresso text-cream rounded-2xl shadow-lg gap-2 focus:outline-none focus:ring-2 focus:ring-terracotta/50 focus:ring-offset-2"
-                    aria-label="Scan Receipt"
-                >
-                    <ScanLine className="w-6 h-6" aria-hidden="true" />
-                    <span className="font-medium text-sm">Scan Receipt</span>
-                </motion.button>
+            <div className="px-5 py-6 space-y-8">
+                {/* Bento Grid: Quick Actions & Highlights */}
+                <div className="grid grid-cols-2 gap-4">
+                    {/* Action: Scan */}
+                    <motion.button
+                        onClick={onScan}
+                        whileTap={{ scale: 0.97 }}
+                        className="col-span-1 aspect-[4/3] flex flex-col items-center justify-center p-4 bg-text-primary text-bg-primary rounded-2xl shadow-lg gap-3 focus:outline-none focus:ring-2 focus:ring-terracotta/50 focus:ring-offset-2 relative overflow-hidden group"
+                        aria-label="Scan Receipt"
+                    >
+                        <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <ScanLine className="w-8 h-8" aria-hidden="true" strokeWidth={1.5} />
+                        <span className="font-display font-bold text-lg leading-none">Scan</span>
+                    </motion.button>
 
-                <motion.button
-                    onClick={() => {
-                        onTabChange('assistant');
-                        sendMessage("What should I cook based on my expiring ingredients?");
-                    }}
-                    whileTap={{ scale: 0.97 }}
-                    className="flex flex-col items-center justify-center p-4 bg-terracotta text-white rounded-2xl shadow-lg gap-2 focus:outline-none focus:ring-2 focus:ring-terracotta/50 focus:ring-offset-2"
-                    aria-label="Suggest Meal based on expiring ingredients"
-                >
-                    <ChefHat className="w-6 h-6" aria-hidden="true" />
-                    <span className="font-medium text-sm">Suggest Meal</span>
-                </motion.button>
-            </div>
-
-
-            {/* Eat First Section (Expiring Soon) */}
-            <EatFirstSection
-                leftovers={[]} // We display leftovers in their own grid now, unless urgent? Let's just use EatFirst for expiring items mainly
-                expiringSoon={expiringItems}
-                onItemTap={handleItemTap}
-            />
-
-            {/* Leftovers Grid */}
-            <LeftoversGrid
-                leftovers={leftovers}
-                onItemTap={handleItemTap}
-            />
-
-            {/* Main Inventory */}
-            <motion.div
-                className="px-5 mt-6"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.4, delay: 0.3 }}
-            >
-                {/* Section Header */}
-                <div className="flex items-center justify-between mb-4">
-                    <h2 className="font-display text-lg font-semibold text-espresso">
-                        Inventory
-                    </h2>
-                    <span className="text-xs text-latte font-medium bg-parchment px-2.5 py-1 rounded-full">
-                        {filteredItems.length} items
-                    </span>
+                    {/* Action: Suggest */}
+                    <motion.button
+                        onClick={() => {
+                            onTabChange('assistant');
+                            sendMessage("What should I cook based on my expiring ingredients?");
+                        }}
+                        whileTap={{ scale: 0.97 }}
+                        className="col-span-1 aspect-[4/3] flex flex-col items-center justify-center p-4 bg-terracotta text-white rounded-2xl shadow-lg gap-3 focus:outline-none focus:ring-2 focus:ring-terracotta/50 focus:ring-offset-2 relative overflow-hidden group"
+                        aria-label="Suggest Meal"
+                    >
+                        <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <ChefHat className="w-8 h-8" aria-hidden="true" strokeWidth={1.5} />
+                        <span className="font-display font-bold text-lg leading-none">Cook</span>
+                    </motion.button>
                 </div>
 
-                {/* Category Tabs */}
-                <div className="sticky top-[72px] z-10 -mx-5 px-5 py-2 glass">
-                    <CategoryTabs
-                        activeCategory={activeCategory}
-                        onSelect={setActiveCategory}
+                {/* Eat First Section */}
+                <div className="space-y-4">
+                    <EatFirstSection
+                        leftovers={[]}
+                        expiringSoon={expiringItems}
+                        onItemTap={handleItemTap}
                     />
                 </div>
 
-                {/* Inventory List */}
-                <div className="mt-4 space-y-3 min-h-[300px]">
-                    {filteredItems.length === 0 ? (
-                        <motion.div
-                            className="flex flex-col items-center justify-center py-16 text-center"
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                        >
-                            <div className="w-16 h-16 rounded-full bg-parchment flex items-center justify-center mb-4">
-                                <Sparkles className="w-8 h-8 text-warm-gray" />
-                            </div>
-                            <p className="text-latte font-medium">No items in this category</p>
-                            <p className="text-sm text-warm-gray mt-1">Scan a receipt to add items</p>
-                        </motion.div>
-                    ) : (
-                        <motion.div
-                            className="space-y-2"
-                            initial="hidden"
-                            animate="visible"
-                            variants={{
-                                visible: {
-                                    transition: {
-                                        staggerChildren: 0.05
-                                    }
-                                }
-                            }}
-                        >
-                            {filteredItems.map((item, index) => (
-                                <motion.div
-                                    key={item.id}
-                                    variants={{
-                                        hidden: { opacity: 0, y: 10 },
-                                        visible: { opacity: 1, y: 0 }
-                                    }}
-                                    transition={{ duration: 0.3 }}
-                                >
-                                    <InventoryItem
-                                        item={item}
-                                        onTap={() => handleItemTap(item)}
-                                    />
-                                </motion.div>
-                            ))}
-                        </motion.div>
-                    )}
+                {/* Leftovers Grid */}
+                <div className="space-y-4">
+                    <LeftoversGrid
+                        leftovers={leftovers}
+                        onItemTap={handleItemTap}
+                    />
                 </div>
-            </motion.div>
+
+                {/* Main Inventory */}
+                <motion.div
+                    className="space-y-4"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.4, delay: 0.3 }}
+                >
+                    {/* Section Header */}
+                    <div className="flex items-center justify-between border-b border-border-subtle pb-2">
+                        <h2 className="font-display text-2xl font-bold text-text-primary">
+                            Pantry
+                        </h2>
+                    </div>
+
+                    {/* Category Tabs */}
+                    <div className="sticky top-[88px] z-10 -mx-5 px-5 py-2 glass backdrop-blur-xl">
+                        <CategoryTabs
+                            activeCategory={activeCategory}
+                            onSelect={setActiveCategory}
+                        />
+                    </div>
+
+                    {/* Inventory List */}
+                    <div className="space-y-3 min-h-[300px]">
+                        {filteredItems.length === 0 ? (
+                            <motion.div
+                                className="flex flex-col items-center justify-center py-16 text-center"
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                            >
+                                <div className="w-16 h-16 rounded-full bg-bg-secondary flex items-center justify-center mb-4 shadow-inner">
+                                    <Sparkles className="w-8 h-8 text-text-tertiary" />
+                                </div>
+                                <p className="text-text-secondary font-medium font-display text-lg">Empty Shelf</p>
+                                <p className="text-sm text-text-tertiary mt-1">Scan a receipt to stock up</p>
+                            </motion.div>
+                        ) : (
+                            <motion.div
+                                className="grid grid-cols-1 gap-3"
+                                initial="hidden"
+                                animate="visible"
+                                variants={{
+                                    visible: {
+                                        transition: {
+                                            staggerChildren: 0.05
+                                        }
+                                    }
+                                }}
+                            >
+                                {filteredItems.map((item, index) => (
+                                    <motion.div
+                                        key={item.id}
+                                        variants={{
+                                            hidden: { opacity: 0, y: 10 },
+                                            visible: { opacity: 1, y: 0 }
+                                        }}
+                                        transition={{ duration: 0.3 }}
+                                    >
+                                        <InventoryItem
+                                            item={item}
+                                            onTap={() => handleItemTap(item)}
+                                        />
+                                    </motion.div>
+                                ))}
+                            </motion.div>
+                        )}
+                    </div>
+                </motion.div>
+            </div>
         </div>
     );
 }

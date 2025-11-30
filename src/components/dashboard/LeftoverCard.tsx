@@ -27,8 +27,8 @@ export function LeftoverCard({ item, onTap }: LeftoverCardProps) {
             style={{ rotate: rotation }}
         >
             <div className={cn(
-                "bg-warm-white rounded-sm shadow-md overflow-hidden transition-shadow hover:shadow-lg h-full flex flex-col",
-                "border border-clay/10"
+                "texture-paper bg-bg-secondary rounded-lg shadow-sm overflow-hidden transition-all hover:shadow-md h-full flex flex-col",
+                "border border-border-subtle"
             )}>
                 {/* Image area */}
                 <div className={cn(
@@ -37,7 +37,7 @@ export function LeftoverCard({ item, onTap }: LeftoverCardProps) {
                         ? "bg-gradient-to-br from-cayenne/10 to-cayenne/5"
                         : isWarning
                             ? "bg-gradient-to-br from-marigold/10 to-marigold/5"
-                            : "bg-gradient-to-br from-parchment to-ivory"
+                            : "bg-gradient-to-br from-bg-secondary to-bg-primary"
                 )}>
                     {/* Food icon/emoji */}
                     <div className="text-4xl">🥡</div>
@@ -68,19 +68,19 @@ export function LeftoverCard({ item, onTap }: LeftoverCardProps) {
                             ? "bg-cayenne/10 text-cayenne"
                             : isWarning
                                 ? "bg-marigold/10 text-marigold"
-                                : "bg-parchment text-latte"
+                                : "bg-bg-tertiary text-text-secondary"
                     )}>
                         <Clock className="w-2.5 h-2.5" />
                         {daysLeft <= 0 ? 'Today!' : `${daysLeft}d left`}
                     </div>
 
                     {/* Name - handwritten style */}
-                    <h4 className="font-accent text-lg text-espresso leading-tight line-clamp-2 mb-auto">
+                    <h4 className="font-accent text-xl text-text-primary leading-tight line-clamp-2 mb-auto">
                         {item.name}
                     </h4>
 
                     {/* Quantity */}
-                    <div className="flex items-center gap-1 mt-2 text-xs text-latte">
+                    <div className="flex items-center gap-1 mt-2 text-xs text-text-secondary font-body">
                         <Utensils className="w-3 h-3" />
                         <span>{item.quantity || item.remainingQty} {item.unit}</span>
                     </div>

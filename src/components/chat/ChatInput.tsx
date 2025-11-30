@@ -148,7 +148,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                                         src={att.data}
                                         alt="Preview"
                                         fill
-                                        className="object-cover rounded-xl border-2 border-clay/20"
+                                        className="object-cover rounded-xl border-2 border-border-strong"
                                     />
                                     <button
                                         onClick={() => removeAttachment(i)}
@@ -165,23 +165,22 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                 {/* Input Container */}
                 <motion.div
                     className={cn(
-                        "flex items-end gap-2 bg-warm-white rounded-2xl p-2 transition-all duration-200",
+                        "flex items-end gap-2 texture-paper bg-bg-secondary rounded-2xl p-2 transition-all duration-200",
                         "border-2 shadow-sm",
                         isFocused
-                            ? "border-terracotta/40 shadow-glow"
-                            : "border-clay/15 hover:border-clay/25"
+                            ? "border-terracotta/40 shadow-md"
+                            : "border-border-subtle hover:border-border-strong"
                     )}
                     animate={{
                         scale: isFocused ? 1.01 : 1
                     }}
                     transition={{ duration: 0.15 }}
                 >
-                    {/* Camera Button - Opens live camera */}
                     <motion.button
                         onClick={() => setIsCameraOpen(true)}
                         className={cn(
                             "p-2.5 rounded-xl transition-all",
-                            "text-latte hover:text-espresso hover:bg-parchment"
+                            "text-text-tertiary hover:text-text-primary hover:bg-bg-tertiary"
                         )}
                         disabled={disabled}
                         whileTap={{ scale: 0.9 }}
@@ -191,12 +190,11 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                         <Camera size={22} strokeWidth={1.5} />
                     </motion.button>
 
-                    {/* Upload Button - Opens file picker */}
                     <motion.button
                         onClick={() => fileInputRef.current?.click()}
                         className={cn(
                             "p-2.5 rounded-xl transition-all",
-                            "text-latte hover:text-espresso hover:bg-parchment"
+                            "text-text-tertiary hover:text-text-primary hover:bg-bg-tertiary"
                         )}
                         disabled={disabled}
                         whileTap={{ scale: 0.9 }}
@@ -229,8 +227,8 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                         rows={1}
                         className={cn(
                             "flex-1 bg-transparent border-0 focus:ring-0 p-2 min-h-[44px] max-h-[120px]",
-                            "resize-none text-base text-espresso",
-                            "placeholder:text-warm-gray-light"
+                            "resize-none text-base text-text-primary font-body",
+                            "placeholder:text-text-tertiary"
                         )}
                         aria-label="Message input"
                     />
@@ -243,7 +241,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                             "p-2.5 rounded-xl transition-all duration-200",
                             hasContent && !disabled
                                 ? "bg-terracotta text-white shadow-md hover:bg-terracotta-dark"
-                                : "text-warm-gray-light bg-transparent"
+                                : "text-text-tertiary bg-transparent"
                         )}
                         whileTap={{ scale: 0.9 }}
                         animate={{
@@ -263,7 +261,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                 </motion.div>
 
                 {/* Hint text */}
-                <p className="text-center text-xs text-warm-gray mt-2">
+                <p className="text-center text-xs text-text-tertiary mt-2 font-body">
                     Press Enter to send • Shift+Enter for new line
                 </p>
             </div >

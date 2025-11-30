@@ -47,10 +47,10 @@ export function EatFirstSection({ leftovers, expiringSoon, onItemTap }: EatFirst
                             )}
                         </div>
                         <div>
-                            <h2 className="font-display text-xl font-bold text-espresso">
+                            <h2 className="font-display text-2xl font-bold text-text-primary tracking-tight">
                                 Eat First
                             </h2>
-                            <p className="text-xs text-latte">Use these before they expire</p>
+                            <p className="text-xs text-text-secondary font-body">Use these before they expire</p>
                         </div>
                     </div>
                 </div>
@@ -65,10 +65,10 @@ export function EatFirstSection({ leftovers, expiringSoon, onItemTap }: EatFirst
                     >
                         <div className="flex items-center gap-2">
                             <Clock className="w-4 h-4 text-marigold" />
-                            <h3 className="text-xs font-semibold text-latte uppercase tracking-wider">
+                            <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider font-body">
                                 Leftovers
                             </h3>
-                            <span className="text-xs text-warm-gray">({leftovers.length})</span>
+                            <span className="text-xs text-text-tertiary">({leftovers.length})</span>
                         </div>
 
                         <div className="flex gap-4 overflow-x-auto pb-2 -mx-5 px-5 snap-x snap-mandatory hide-scrollbar">
@@ -100,10 +100,10 @@ export function EatFirstSection({ leftovers, expiringSoon, onItemTap }: EatFirst
                     >
                         <div className="flex items-center gap-2">
                             <AlertTriangle className="w-4 h-4 text-cayenne" />
-                            <h3 className="text-xs font-semibold text-latte uppercase tracking-wider">
+                            <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider font-body">
                                 Expiring Soon
                             </h3>
-                            <span className="text-xs text-warm-gray">({expiringSoon.length})</span>
+                            <span className="text-xs text-text-tertiary">({expiringSoon.length})</span>
                         </div>
 
                         <div className="space-y-2">
@@ -127,7 +127,7 @@ export function EatFirstSection({ leftovers, expiringSoon, onItemTap }: EatFirst
             </div>
 
             {/* Bottom fade to main content */}
-            <div className="h-4 bg-gradient-to-b from-transparent to-ivory" />
+            <div className="h-4 bg-gradient-to-b from-transparent to-bg-primary" />
         </motion.div>
     );
 }

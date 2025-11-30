@@ -21,9 +21,9 @@ export const QuickActionChips = React.memo(function QuickActionChips({ onAction,
                         key={action.id}
                         onClick={() => onAction(action.text, (action as any).openCamera)}
                         className={cn(
-                            "flex items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5",
-                            "bg-gradient-to-r border border-clay/10 shadow-sm",
-                            "text-sm font-medium text-espresso",
+                            "flex items-center gap-2 whitespace-nowrap rounded-xl px-4 py-3",
+                            "bg-gradient-to-r border border-border-subtle shadow-sm hover:shadow-md",
+                            "text-sm font-medium font-body text-text-primary",
                             "transition-all duration-200 active:scale-[0.98]",
                             action.color
                         )}
@@ -32,7 +32,7 @@ export const QuickActionChips = React.memo(function QuickActionChips({ onAction,
                         transition={{ duration: 0.3, delay: index * 0.1 }}
                         whileTap={{ scale: 0.97 }}
                     >
-                        <action.icon size={18} className={action.iconColor} aria-hidden="true" />
+                        <action.icon size={18} className={action.iconColor} aria-hidden="true" strokeWidth={1.5} />
                         <span>{action.label}</span>
                     </motion.button>
                 ))}
