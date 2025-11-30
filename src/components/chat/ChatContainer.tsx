@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useChat } from '@/hooks/useChat';
+import { useInventory } from '@/hooks/useInventory';
 import { ChatInput, ChatInputHandle } from './ChatInput';
 import { MessageBubble } from './MessageBubble';
 import { QuickActionChips } from './QuickActionChips';
@@ -12,22 +13,32 @@ import { InventorySheet } from '@/components/inventory/InventorySheet';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChefHat, Sparkles, AlertCircle, X } from 'lucide-react';
 import { InventoryReviewCard } from './InventoryReviewCard';
-import { InventoryReviewSheet } from './InventoryReviewSheet';
-import { addInventory } from '@/agent/tools/inventory'; // We can use the tool logic directly or API
+import { InventoryReviewSheet, InventoryItemDraft } from './InventoryReviewSheet';
 
 interface ChatContainerProps {
     className?: string;
+    intent?: 'scan';
+    onIntentHandled?: () => void;
 }
 
-export function ChatContainer({ className }: ChatContainerProps) {
+export function ChatContainer({ className, intent, onIntentHandled }: ChatContainerProps) {
     const { messages, isThinking, isStreaming, thinkingText, activeTools, error, sendMessage, clearError } = useChat();
+    const { addItemsOptimistically } = useInventory();
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const chatInputRef = useRef<ChatInputHandle>(null);
     const [isInventoryOpen, setIsInventoryOpen] = useState(false);
-    
+
+    // Handle intents
+    useEffect(() => {
+        if (intent === 'scan' && chatInputRef.current) {
+            chatInputRef.current.openCamera();
+            onIntentHandled?.();
+        }
+    }, [intent, onIntentHandled]);
+
     // Review Sheet State
     const [isReviewSheetOpen, setIsReviewSheetOpen] = useState(false);
-    const [reviewItems, setReviewItems] = useState<any[]>([]);
+    const [reviewItems, setReviewItems] = useState<InventoryItemDraft[]>([]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -48,19 +59,19 @@ export function ChatContainer({ className }: ChatContainerProps) {
         console.log('Expand recipe:', recipe);
     };
 
-    const handleReviewClick = (items: any[]) => {
+    const handleReviewClick = (items: InventoryItemDraft[]) => {
         setReviewItems(items);
         setIsReviewSheetOpen(true);
     };
 
-    const handleSaveInventory = async (items: any[]) => {
+    const handleSaveInventory = async (items: InventoryItemDraft[]) => {
         // Use the addInventory tool logic to save to DB
         // Map draft items to the expected AddInventoryItem format
         const itemsToAdd = items.map(item => ({
             name: item.name,
             quantity: item.quantity,
             unit: item.unit,
-            category: item.category,
+            category: item.category as any, // TODO: Fix strict type check here by validating category against allowed values
             confidence: 'high' as const,
             source: 'manual' as const,
             container: {
@@ -74,14 +85,14 @@ export function ChatContainer({ className }: ChatContainerProps) {
         }));
 
         try {
-            await addInventory(itemsToAdd);
-            
+            await addItemsOptimistically(itemsToAdd);
+
             // Send confirmation message to chat to close the loop with the agent
             const summary = items.map(i => `${i.quantity} ${i.unit} ${i.name}`).join(', ');
             await sendMessage(`I reviewed the list and confirmed adding these items: ${summary}`);
         } catch (err) {
             console.error("Failed to save inventory:", err);
-            // The Sheet handles the error UI usually, but we could show a toast here
+            // Error toast is handled in useInventory
         }
     };
 
@@ -204,20 +215,20 @@ export function ChatContainer({ className }: ChatContainerProps) {
                                         isStreaming={isStreaming && index === lastAssistantIndex}
                                         onRecipeExpand={handleRecipeExpand}
                                     />
-                                    
+
                                     {/* Generative UI for Tool Calls */}
                                     {msg.role === 'assistant' && msg.toolCalls?.map(tool => {
-                                         if (tool.name === 'proposeInventory' && tool.status === 'completed' && tool.args?.items) {
-                                             return (
-                                                 <div key={tool.id} className="ml-12 mt-2 mb-4 max-w-[85%]"> 
-                                                     <InventoryReviewCard 
-                                                         items={tool.args!.items as any[]} 
-                                                         onReview={() => handleReviewClick(tool.args!.items as any[])} 
-                                                     />
-                                                 </div>
-                                             );
-                                         }
-                                         return null;
+                                        if (tool.name === 'proposeInventory' && tool.status === 'completed' && tool.args?.items) {
+                                            return (
+                                                <div key={tool.id} className="ml-12 mt-2 mb-4 max-w-[85%]">
+                                                    <InventoryReviewCard
+                                                        items={tool.args!.items as InventoryItemDraft[]}
+                                                        onReview={() => handleReviewClick(tool.args!.items as InventoryItemDraft[])}
+                                                    />
+                                                </div>
+                                            );
+                                        }
+                                        return null;
                                     })}
                                 </motion.div>
                             ))}
@@ -281,7 +292,7 @@ export function ChatContainer({ className }: ChatContainerProps) {
                 open={isInventoryOpen}
                 onClose={() => setIsInventoryOpen(false)}
             />
-            
+
             <InventoryReviewSheet
                 open={isReviewSheetOpen}
                 onOpenChange={setIsReviewSheetOpen}

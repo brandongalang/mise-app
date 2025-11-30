@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Playfair_Display, Source_Sans_3, Caveat } from "next/font/google";
 import { SessionProvider } from "@/contexts/SessionContext";
+import { Toaster } from "sonner";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import "./globals.css";
 
 // Display font - elegant serif for headings
@@ -58,9 +60,15 @@ export default function RootLayout({
       className={`${playfair.variable} ${sourceSans.variable} ${caveat.variable}`}
     >
       <body className="antialiased overflow-hidden">
-        <SessionProvider>
-          {children}
-        </SessionProvider>
+        <ErrorBoundary>
+          <SessionProvider>
+            {children}
+            <Toaster position="top-center" toastOptions={{
+              className: 'bg-ivory border-clay/10 text-espresso font-body shadow-lg',
+              descriptionClassName: 'text-latte'
+            }} />
+          </SessionProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );

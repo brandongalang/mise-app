@@ -7,11 +7,12 @@ import { DashboardView } from '@/components/dashboard/DashboardView';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'kitchen' | 'assistant'>('kitchen');
+  const [scanTriggered, setScanTriggered] = useState(false);
 
   const handleScan = () => {
-    // Switch to assistant and trigger scan mode (future implementation)
+    // Switch to assistant and trigger scan mode
     setActiveTab('assistant');
-    // TODO: Pass a "scan" intent to ChatContainer
+    setScanTriggered(true);
   };
 
   return (
@@ -26,7 +27,10 @@ export default function Home() {
       </div>
 
       <div className={activeTab === 'assistant' ? 'block h-full' : 'hidden h-full'}>
-        <ChatContainer />
+        <ChatContainer
+          intent={scanTriggered ? 'scan' : undefined}
+          onIntentHandled={() => setScanTriggered(false)}
+        />
       </div>
     </MainLayout>
   );

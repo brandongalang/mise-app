@@ -1,5 +1,7 @@
 'use client';
 
+import React from 'react';
+
 import { Message, RecipeCard } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
@@ -15,7 +17,7 @@ interface MessageBubbleProps {
     onRecipeExpand?: (recipe: RecipeCard) => void;
 }
 
-export function MessageBubble({ message, isStreaming = false, onRecipeExpand }: MessageBubbleProps) {
+export const MessageBubble = React.memo(function MessageBubble({ message, isStreaming = false, onRecipeExpand }: MessageBubbleProps) {
     const isUser = message.role === 'user';
     const hasToolCalls = !isUser && message.toolCalls && message.toolCalls.length > 0;
     const hasContent = message.content && message.content.trim().length > 0;
@@ -123,4 +125,13 @@ export function MessageBubble({ message, isStreaming = false, onRecipeExpand }: 
             )}
         </div>
     );
-}
+}, (prevProps, nextProps) => {
+    // Custom comparison for performance
+    return (
+        prevProps.isStreaming === nextProps.isStreaming &&
+        prevProps.message.id === nextProps.message.id &&
+        prevProps.message.content === nextProps.message.content &&
+        prevProps.message.toolCalls?.length === nextProps.message.toolCalls?.length &&
+        prevProps.message.actionCard === nextProps.message.actionCard
+    );
+});

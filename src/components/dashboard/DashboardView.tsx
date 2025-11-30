@@ -11,6 +11,7 @@ import { ScanLine, Sparkles, ChefHat, ShoppingCart } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { ProfileSwitcher } from '@/components/profiles/ProfileSwitcher';
 import { useChat } from '@/hooks/useChat'; // Hook to open chat interactions
+import { DashboardSkeleton } from '@/components/skeletons/DashboardSkeleton';
 
 interface DashboardViewProps {
     onScan: () => void;
@@ -21,7 +22,7 @@ export function DashboardView({ onScan, onTabChange }: DashboardViewProps) {
     const { summary, isLoading, error, fetchExpiringItems, fetchLeftovers } = useInventory();
     const { sendMessage } = useChat();
     const [activeCategory, setActiveCategory] = useState<IngredientCategory | 'all'>('all');
-    
+
     // Local state for focused items (fetched client-side on mount)
     const [expiringItems, setExpiringItems] = useState<IInventoryItem[]>([]);
     const [leftovers, setLeftovers] = useState<IInventoryItem[]>([]);
@@ -29,27 +30,20 @@ export function DashboardView({ onScan, onTabChange }: DashboardViewProps) {
     // Fetch focused data on mount
     useEffect(() => {
         const loadFocusedData = async () => {
-             const [exp, left] = await Promise.all([
-                 fetchExpiringItems(),
-                 fetchLeftovers()
-             ]);
-             setExpiringItems(exp);
-             setLeftovers(left);
+            const [exp, left] = await Promise.all([
+                fetchExpiringItems(),
+                fetchLeftovers()
+            ]);
+            setExpiringItems(exp);
+            setLeftovers(left);
         };
         loadFocusedData();
     }, [fetchExpiringItems, fetchLeftovers]);
 
     if (isLoading) {
-        return (
-            <div className="flex flex-col items-center justify-center h-full text-latte gap-4">
-                <motion.div
-                    className="w-12 h-12 rounded-full border-2 border-terracotta/30 border-t-terracotta"
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                />
-                <span className="font-medium">Loading your kitchen...</span>
-            </div>
-        );
+        if (isLoading) {
+            return <DashboardSkeleton />;
+        }
     }
 
     if (error || !summary) {
@@ -105,45 +99,45 @@ export function DashboardView({ onScan, onTabChange }: DashboardViewProps) {
                     </div>
 
                     <div className="flex items-center gap-3">
-                         {/* Placeholder for Profile Switcher if needed, or keep in Header component */}
+                        {/* Placeholder for Profile Switcher if needed, or keep in Header component */}
                     </div>
                 </div>
             </header>
 
             {/* Quick Actions */}
             <div className="px-5 py-4 grid grid-cols-2 gap-3">
-                 <motion.button
+                <motion.button
                     onClick={onScan}
                     whileTap={{ scale: 0.97 }}
                     className="flex flex-col items-center justify-center p-4 bg-espresso text-cream rounded-2xl shadow-lg gap-2"
-                 >
+                >
                     <ScanLine className="w-6 h-6" />
                     <span className="font-medium text-sm">Scan Receipt</span>
-                 </motion.button>
+                </motion.button>
 
-                 <motion.button
+                <motion.button
                     onClick={() => {
                         onTabChange('assistant');
                         sendMessage("What should I cook based on my expiring ingredients?");
                     }}
                     whileTap={{ scale: 0.97 }}
                     className="flex flex-col items-center justify-center p-4 bg-terracotta text-white rounded-2xl shadow-lg gap-2"
-                 >
+                >
                     <ChefHat className="w-6 h-6" />
                     <span className="font-medium text-sm">Suggest Meal</span>
-                 </motion.button>
+                </motion.button>
             </div>
 
 
             {/* Eat First Section (Expiring Soon) */}
             <EatFirstSection
                 leftovers={[]} // We display leftovers in their own grid now, unless urgent? Let's just use EatFirst for expiring items mainly
-                expiringSoon={expiringItems} 
+                expiringSoon={expiringItems}
                 onItemTap={handleItemTap}
             />
 
             {/* Leftovers Grid */}
-            <LeftoversGrid 
+            <LeftoversGrid
                 leftovers={leftovers}
                 onItemTap={handleItemTap}
             />

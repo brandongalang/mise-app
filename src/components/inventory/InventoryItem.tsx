@@ -1,5 +1,7 @@
 'use client';
 
+import React from 'react';
+
 import { InventoryItem as IInventoryItem, IngredientCategory } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Apple, Beef, Milk, Package, Snowflake, Coffee, ChevronRight } from 'lucide-react';
@@ -30,7 +32,7 @@ const CATEGORY_COLORS: Record<IngredientCategory, string> = {
     unknown: 'bg-warm-gray/15 text-warm-gray',
 };
 
-export function InventoryItem({ item, onTap, compact = false }: InventoryItemProps) {
+export const InventoryItem = React.memo(function InventoryItem({ item, onTap, compact = false }: InventoryItemProps) {
     const days = item.daysUntilExpiry ?? 99;
 
     // Expiry status
@@ -119,4 +121,4 @@ export function InventoryItem({ item, onTap, compact = false }: InventoryItemPro
             </div>
         </div>
     );
-}
+});
