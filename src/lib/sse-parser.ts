@@ -67,26 +67,7 @@ export async function parseSSEStream({
                             case 'tool_end':
                                 onToolCallFinished({
                                     id: data.id,
-                                    name: '', // Name might not be in tool_end, but we need it for ToolCall type. Ideally we merge with existing state in hook.
-                                    // But here we construct a partial or full object.
-                                    // The hook handles merging.
-                                    // But the hook expects a ToolCall object.
-                                    // Let's assume data has what we need or we pass minimal info.
-                                    // Actually, looking at useChat.ts:
-                                    // onToolCallFinished: async (toolCall: ToolCall) => { ... }
-                                    // So we need to pass a ToolCall.
-                                    // If tool_end only has id/result, we might need to fetch the name from somewhere or just pass what we have.
-                                    // Let's pass what we have and let the hook handle it.
-                                    // But TS will complain if we miss properties.
-                                    // Let's check what data.result is.
-
-                                    // Ideally tool_end should provide enough info or we just pass the updates.
-                                    // But the callback expects ToolCall.
-                                    // Let's cast it for now or construct a dummy one.
-                                    // The hook uses `t.id === toolCall.id ? { ...t, status: toolCall.status, result: toolCall.result } : t`
-                                    // So it only uses id, status, result.
-                                    id: data.id,
-                                    name: 'unknown', // Placeholder
+                                    name: 'unknown',
                                     status: (data.error ? 'error' : 'completed') as ToolStatus,
                                     result: data.result,
                                     endTime: new Date()
