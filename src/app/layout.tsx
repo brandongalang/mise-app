@@ -1,31 +1,15 @@
 import type { Metadata, Viewport } from "next";
-import { Playfair_Display, Source_Sans_3, Caveat } from "next/font/google";
+import { Source_Sans_3 } from "next/font/google";
 import { SessionProvider } from "@/contexts/SessionContext";
 import { Toaster } from "sonner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import "./globals.css";
 
-// Display font - elegant serif for headings
-const playfair = Playfair_Display({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-display",
-  display: "swap",
-});
-
-// Body font - warm, readable sans-serif
+// Body font - Clean sans-serif
 const sourceSans = Source_Sans_3({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
-  variable: "--font-body",
-  display: "swap",
-});
-
-// Accent font - handwritten touches
-const caveat = Caveat({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-accent",
+  variable: "--font-sans",
   display: "swap",
 });
 
@@ -46,7 +30,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  themeColor: "#FAF7F2",
+  themeColor: "#ffffff",
 };
 
 export default function RootLayout({
@@ -57,15 +41,15 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${playfair.variable} ${sourceSans.variable} ${caveat.variable}`}
+      className={`${sourceSans.variable}`}
     >
       <body className="antialiased overflow-hidden">
         <ErrorBoundary>
           <SessionProvider>
             {children}
             <Toaster position="top-center" toastOptions={{
-              className: 'bg-ivory border-clay/10 text-espresso font-body shadow-lg',
-              descriptionClassName: 'text-latte'
+              className: 'bg-background border-border text-foreground font-sans shadow-lg',
+              descriptionClassName: 'text-muted-foreground'
             }} />
           </SessionProvider>
         </ErrorBoundary>
