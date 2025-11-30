@@ -3,13 +3,15 @@ import { inventoryTools } from "./tools/definitions";
 
 // Multimodal content types for chat messages
 type TextContent = { type: "text"; text: string };
-type ImageContent = {
-  type: "image";
-  image: string; // base64 data or data URL
-  mimeType: string;
-  details?: "high" | "low" | "auto";
+type ImageUrlContent = {
+  type: "image_url";
+  image_url: {
+    url: string;
+    detail?: "high" | "low" | "auto";
+  };
 };
-type MessageContent = string | (TextContent | ImageContent)[];
+
+type MessageContent = string | (TextContent | ImageUrlContent)[];
 
 interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -167,24 +169,21 @@ function buildUserMessage(
     return text || "What's in this image?";
   }
 
-  // Strip data URL prefix if present - ax-llm adds it automatically
-  // The image field should be raw base64, not a data URL
-  let rawBase64 = imageBase64;
-  if (imageBase64.startsWith("data:")) {
-    const base64Match = imageBase64.match(/^data:[^;]+;base64,(.+)$/);
-    if (base64Match) {
-      rawBase64 = base64Match[1];
-    }
+  // Ensure data URL format
+  let dataUrl = imageBase64;
+  if (!imageBase64.startsWith("data:")) {
+    dataUrl = `data:${imageMimeType || "image/jpeg"};base64,${imageBase64}`;
   }
 
   // Build multimodal content array with text and image
-  const content: (TextContent | ImageContent)[] = [
+  const content: (TextContent | ImageUrlContent)[] = [
     { type: "text", text: text || "What's in this image?" },
     {
-      type: "image",
-      image: rawBase64, // Raw base64 only - ax-llm adds the data URL prefix
-      mimeType: imageMimeType || "image/jpeg",
-      details: "high", // Use high detail for better food/receipt analysis
+      type: "image_url",
+      image_url: {
+        url: dataUrl,
+        detail: "high", // Use high detail for better food/receipt analysis
+      },
     },
   ];
 
