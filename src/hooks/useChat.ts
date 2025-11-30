@@ -76,34 +76,12 @@ export function useChat(): UseChatReturn {
         const assistantMessageId = uuidv4();
 
         try {
-            // Use ref to get current messages for conversation history
-            // Include attachments so multimodal context is preserved across messages
+            // Prepare conversation history
             const conversationHistory = messagesRef.current.map(m => ({
                 role: m.role,
                 content: m.content,
                 attachments: m.attachments,
             }));
-
-            // Map to API message format
-            const apiMessages = conversationHistory.map(msg => {
-                const contentParts: ({ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } })[] = [{ type: 'text', text: msg.content }];
-                if (msg.attachments && msg.attachments.length > 0) {
-                    msg.attachments.forEach(att => {
-                        if (att.type === 'image' && att.data) {
-                            // Construct data URI
-                            const dataUri = att.data.startsWith('data:')
-                                ? att.data
-                                : `data:${att.mimeType};base64,${att.data}`;
-
-                            contentParts.push({ type: 'image_url', image_url: { url: dataUri } });
-                        }
-                    });
-                }
-                return {
-                    role: msg.role,
-                    content: contentParts,
-                };
-            });
 
             let currentContent = '';
             let toolCallsState: ToolCall[] = [];
@@ -126,8 +104,9 @@ export function useChat(): UseChatReturn {
             const response = await apiClient.fetchRaw('/api/v1/chat', {
                 method: 'POST',
                 body: JSON.stringify({
-                    messages: apiMessages,
-                    model: 'gpt-4o',
+                    message: text,
+                    attachments,
+                    conversationHistory,
                 }),
                 signal: abortControllerRef.current?.signal,
                 retries: 2

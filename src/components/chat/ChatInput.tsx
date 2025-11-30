@@ -114,12 +114,12 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                             initial={{ opacity: 0, y: -10 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -10 }}
-                            className="mb-3 p-3 bg-cayenne/10 border border-cayenne/20 rounded-xl flex items-center gap-2"
+                            className="mb-3 p-3 bg-destructive/10 border border-destructive/20 rounded-xl flex items-center gap-2"
                         >
-                            <span className="text-cayenne text-sm flex-1">{error}</span>
+                            <span className="text-destructive text-sm flex-1">{error}</span>
                             <button
                                 onClick={() => setError(null)}
-                                className="text-cayenne/60 hover:text-cayenne transition-colors"
+                                className="text-destructive/60 hover:text-destructive transition-colors"
                             >
                                 <X size={16} />
                             </button>
@@ -148,11 +148,11 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                                         src={att.data}
                                         alt="Preview"
                                         fill
-                                        className="object-cover rounded-xl border-2 border-border-strong"
+                                        className="object-cover rounded-xl border-2 border-border"
                                     />
                                     <button
                                         onClick={() => removeAttachment(i)}
-                                        className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-cayenne text-white rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
+                                        className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
                                     >
                                         <X size={12} />
                                     </button>
@@ -165,11 +165,11 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                 {/* Input Container */}
                 <motion.div
                     className={cn(
-                        "flex items-end gap-2 texture-paper bg-bg-secondary rounded-2xl p-2 transition-all duration-200",
+                        "flex items-end gap-2 bg-muted/50 rounded-2xl p-2 transition-all duration-200",
                         "border-2 shadow-sm",
                         isFocused
-                            ? "border-terracotta/40 shadow-md"
-                            : "border-border-subtle hover:border-border-strong"
+                            ? "border-primary/40 shadow-md bg-background"
+                            : "border-transparent hover:border-border"
                     )}
                     animate={{
                         scale: isFocused ? 1.01 : 1
@@ -180,7 +180,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                         onClick={() => setIsCameraOpen(true)}
                         className={cn(
                             "p-2.5 rounded-xl transition-all",
-                            "text-text-tertiary hover:text-text-primary hover:bg-bg-tertiary"
+                            "text-muted-foreground hover:text-foreground hover:bg-accent"
                         )}
                         disabled={disabled}
                         whileTap={{ scale: 0.9 }}
@@ -194,7 +194,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                         onClick={() => fileInputRef.current?.click()}
                         className={cn(
                             "p-2.5 rounded-xl transition-all",
-                            "text-text-tertiary hover:text-text-primary hover:bg-bg-tertiary"
+                            "text-muted-foreground hover:text-foreground hover:bg-accent"
                         )}
                         disabled={disabled}
                         whileTap={{ scale: 0.9 }}
@@ -227,8 +227,8 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                         rows={1}
                         className={cn(
                             "flex-1 bg-transparent border-0 focus:ring-0 p-2 min-h-[44px] max-h-[120px]",
-                            "resize-none text-base text-text-primary font-body",
-                            "placeholder:text-text-tertiary"
+                            "resize-none text-base text-foreground font-sans",
+                            "placeholder:text-muted-foreground"
                         )}
                         aria-label="Message input"
                     />
@@ -240,8 +240,8 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                         className={cn(
                             "p-2.5 rounded-xl transition-all duration-200",
                             hasContent && !disabled
-                                ? "bg-terracotta text-white shadow-md hover:bg-terracotta-dark"
-                                : "text-text-tertiary bg-transparent"
+                                ? "bg-primary text-primary-foreground shadow-md hover:bg-primary/90"
+                                : "text-muted-foreground bg-transparent"
                         )}
                         whileTap={{ scale: 0.9 }}
                         animate={{
@@ -261,7 +261,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                 </motion.div>
 
                 {/* Hint text */}
-                <p className="text-center text-xs text-text-tertiary mt-2 font-body">
+                <p className="text-center text-xs text-muted-foreground mt-2 font-sans">
                     Press Enter to send • Shift+Enter for new line
                 </p>
             </div >
