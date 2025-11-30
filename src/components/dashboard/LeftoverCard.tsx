@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { InventoryItem } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Clock, Utensils } from 'lucide-react';
@@ -16,7 +17,8 @@ export function LeftoverCard({ item, onTap }: LeftoverCardProps) {
     const isWarning = daysLeft <= 5 && daysLeft > 2;
 
     // Random slight rotation for Polaroid effect
-    const rotation = Math.random() * 4 - 2; // -2 to 2 degrees
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const rotation = useMemo(() => Math.random() * 4 - 2, []); // -2 to 2 degrees
 
     return (
         <motion.div

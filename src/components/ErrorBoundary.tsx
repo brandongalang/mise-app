@@ -37,7 +37,7 @@ export class ErrorBoundary extends Component<Props, State> {
                         Something went wrong
                     </h1>
                     <p className="text-latte mb-8 max-w-md">
-                        We're sorry, but the application encountered an unexpected error.
+                        We&apos;re sorry, but the application encountered an unexpected error.
                         Please try reloading the page.
                     </p>
                     <button
