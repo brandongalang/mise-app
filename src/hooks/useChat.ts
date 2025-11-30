@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { Message, Attachment, ToolCall, ToolStatus } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 import { parseSSEStream } from '@/lib/sse-parser';
-import { withRetry, isRetryableError } from '@/lib/retry';
+import { api as apiClient } from '@/lib/api-client';
 
 interface UseChatReturn {
     messages: Message[];
@@ -84,8 +84,6 @@ export function useChat(): UseChatReturn {
                 attachments: m.attachments,
             }));
 
-            import { withRetry, isRetryableError } from '@/lib/retry';
-
             // ... (imports)
 
             // ... (inside useChat)
@@ -113,88 +111,77 @@ export function useChat(): UseChatReturn {
 
             // ... (rest of the function)
 
-            await withRetry(async () => {
-                const response = await fetch('/api/v1/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        messages: apiMessages,
-                        model: 'gpt-4o',
-                    }),
-                    signal: abortControllerRef.current?.signal,
-                });
+            const response = await apiClient.fetchRaw('/api/v1/chat', {
+                method: 'POST',
+                body: JSON.stringify({
+                    messages: apiMessages,
+                    model: 'gpt-4o',
+                }),
+                signal: abortControllerRef.current?.signal,
+                retries: 2
+            });
 
-                if (!response.ok) {
-                    const error = new Error(`HTTP error! status: ${response.status}`);
-                    (error as any).status = response.status;
-                    throw error;
-                }
+            if (!response.body) throw new Error('No response body');
 
-                if (!response.body) throw new Error('No response body');
+            // Handle SSE stream
+            await parseSSEStream({
+                stream: response.body,
+                signal: abortControllerRef.current?.signal,
+                onThinking: (text: string) => {
+                    setIsThinking(true);
+                    setThinkingText(text);
+                },
+                onContent: (content: string) => {
+                    ensureAssistantMessage();
+                    setIsThinking(false);
+                    setThinkingText(''); // Clear thinking text once content starts
+                    setIsStreaming(true);
 
-                // Handle SSE stream
-                await parseSSEStream({
-                    stream: response.body,
-                    signal: abortControllerRef.current?.signal,
-                    onThinking: (text: string) => {
-                        setIsThinking(true);
-                        setThinkingText(text);
-                    },
-                    onContent: (content: string) => {
-                        ensureAssistantMessage();
-                        setIsThinking(false);
-                        setThinkingText(''); // Clear thinking text once content starts
-                        setIsStreaming(true);
+                    // Accumulate content for the current message
+                    currentContent += content;
 
-                        // Accumulate content for the current message
-                        currentContent += content;
+                    updateMessage(assistantMessageId, { content: currentContent });
+                },
+                onToolCall: (toolCall: ToolCall) => {
+                    ensureAssistantMessage();
+                    setIsThinking(false);
+                    setThinkingText(''); // Clear thinking text once tool call starts
+                    setIsStreaming(true); // Tool calls are part of streaming response
 
-                        updateMessage(assistantMessageId, { content: currentContent });
-                    },
-                    onToolCall: (toolCall: ToolCall) => {
-                        ensureAssistantMessage();
-                        setIsThinking(false);
-                        setThinkingText(''); // Clear thinking text once tool call starts
-                        setIsStreaming(true); // Tool calls are part of streaming response
+                    // Update tool calls state
+                    const existingCallIndex = toolCallsState.findIndex(tc => tc.id === toolCall.id);
 
-                        // Update tool calls state
-                        const existingCallIndex = toolCallsState.findIndex(tc => tc.id === toolCall.id);
-
-                        if (existingCallIndex >= 0) {
-                            // Update existing tool call
-                            toolCallsState[existingCallIndex] = toolCall;
-                        } else {
-                            // Add new tool call
-                            toolCallsState.push(toolCall);
-                        }
-                        setActiveTools([...toolCallsState]); // Update active tools for UI
-                        updateMessage(assistantMessageId, { toolCalls: [...toolCallsState] });
-                    },
-                    onToolCallFinished: async (toolCall: ToolCall) => {
-                        // Update the specific tool call with its final status and result
-                        toolCallsState = toolCallsState.map(t =>
-                            t.id === toolCall.id
-                                ? { ...t, status: toolCall.status, result: toolCall.result, endTime: new Date() }
-                                : t
-                        );
-                        setActiveTools([...toolCallsState]);
-                        updateMessage(assistantMessageId, { toolCalls: [...toolCallsState] });
-                    },
-                    onComplete: () => {
-                        setIsStreaming(false);
-                        setActiveTools([]);
-                    },
-                    onError: (message: string) => {
-                        console.error('Stream error:', message);
-                        setError(message);
-                        updateMessage(assistantMessageId, {
-                            content: currentContent || 'Sorry, I encountered an error during streaming.',
-                        });
+                    if (existingCallIndex >= 0) {
+                        // Update existing tool call
+                        toolCallsState[existingCallIndex] = toolCall;
+                    } else {
+                        // Add new tool call
+                        toolCallsState.push(toolCall);
                     }
-                });
-            }, {
-                shouldRetry: isRetryableError,
-                retries: 2 // Lower retries for chat to be more responsive
+                    setActiveTools([...toolCallsState]); // Update active tools for UI
+                    updateMessage(assistantMessageId, { toolCalls: [...toolCallsState] });
+                },
+                onToolCallFinished: async (toolCall: ToolCall) => {
+                    // Update the specific tool call with its final status and result
+                    toolCallsState = toolCallsState.map(t =>
+                        t.id === toolCall.id
+                            ? { ...t, status: toolCall.status, result: toolCall.result, endTime: new Date() }
+                            : t
+                    );
+                    setActiveTools([...toolCallsState]);
+                    updateMessage(assistantMessageId, { toolCalls: [...toolCallsState] });
+                },
+                onComplete: () => {
+                    setIsStreaming(false);
+                    setActiveTools([]);
+                },
+                onError: (message: string) => {
+                    console.error('Stream error:', message);
+                    setError(message);
+                    updateMessage(assistantMessageId, {
+                        content: currentContent || 'Sorry, I encountered an error during streaming.',
+                    });
+                }
             });
         } catch (err) {
             if (err instanceof Error && err.name === 'AbortError') {
