@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { InventorySummary, InventoryItem } from '@/lib/types';
 import { api } from '@/db/supabase';
+import { api as apiClient } from '@/lib/api-client';
 import { addInventory } from '@/agent/tools/inventory';
 import { toast } from 'sonner';
-import { withRetry, isRetryableError } from '@/lib/retry';
 
 interface UseInventoryReturn {
     summary: InventorySummary | null;
@@ -21,51 +21,38 @@ export function useInventory(): UseInventoryReturn {
     const [error, setError] = useState<Error | null>(null);
 
     const fetchInventory = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
         try {
-            setIsLoading(true);
-            setError(null);
+            const data = await apiClient.get<any>('/api/v1/inventory/summary');
 
-            await withRetry(async () => {
-                const response = await fetch('/api/v1/inventory/summary');
-                if (!response.ok) {
-                    // Attach status to error for isRetryableError check
-                    const error = new Error('Failed to fetch inventory summary');
-                    (error as any).status = response.status;
-                    throw error;
-                }
-                const data = await response.json();
-
-                // Map API response to match client type expectations
-                const mapItem = (item: any) => ({
-                    ...item,
-                    id: item.containerId,
-                    quantity: item.remainingQty,
-                    daysUntilExpiry: item.daysUntilExpiry ?? 0,
-                    expiresAt: item.expiresAt ? new Date(item.expiresAt) : null,
-                    createdAt: item.createdAt ? new Date(item.createdAt) : new Date(),
-                });
-
-                const mappedSummary: InventorySummary = {
-                    ...data,
-                    expiringSoon: data.expiringSoon.map(mapItem),
-                    leftovers: data.leftovers.map(mapItem),
-                    categories: Object.entries(data.categories).reduce((acc, [key, val]: [string, any]) => ({
-                        ...acc,
-                        [key]: {
-                            ...val,
-                            items: val.items.map(mapItem)
-                        }
-                    }), {})
-                };
-
-                setSummary(mappedSummary);
-            }, {
-                shouldRetry: isRetryableError,
-                onRetry: (attempt) => console.log(`Retrying inventory fetch (attempt ${attempt})...`)
+            // Map API response to match client type expectations
+            const mapItem = (item: any) => ({
+                ...item,
+                id: item.containerId,
+                quantity: item.remainingQty,
+                daysUntilExpiry: item.daysUntilExpiry ?? 0,
+                expiresAt: item.expiresAt ? new Date(item.expiresAt) : null,
+                createdAt: item.createdAt ? new Date(item.createdAt) : new Date(),
             });
 
+            const mappedSummary: InventorySummary = {
+                ...data,
+                expiringSoon: data.expiringSoon.map(mapItem),
+                leftovers: data.leftovers.map(mapItem),
+                categories: Object.entries(data.categories).reduce((acc, [key, val]: [string, any]) => ({
+                    ...acc,
+                    [key]: {
+                        ...val,
+                        items: val.items.map(mapItem)
+                    }
+                }), {})
+            };
+
+            setSummary(mappedSummary);
         } catch (err) {
-            setError(err instanceof Error ? err : new Error('Unknown error'));
+            console.error('Failed to fetch inventory:', err);
+            setError(new Error('Failed to load inventory'));
         } finally {
             setIsLoading(false);
         }
