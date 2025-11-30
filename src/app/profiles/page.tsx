@@ -56,9 +56,9 @@ export default function ProfilesPage() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-ivory texture-paper flex items-center justify-center">
+      <div className="min-h-screen bg-cream texture-paper flex items-center justify-center">
         <motion.div
-          className="w-12 h-12 rounded-full border-3 border-terracotta/30 border-t-terracotta"
+          className="w-12 h-12 rounded-full border-3 border-clay/30 border-t-clay"
           animate={{ rotate: 360 }}
           transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
         />
@@ -67,10 +67,7 @@ export default function ProfilesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-ivory texture-paper">
-      {/* Warm gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-parchment/30 pointer-events-none" />
-
+    <div className="min-h-screen bg-cream texture-paper">
       <div className="relative z-10 flex flex-col min-h-screen px-5 py-8 pt-safe-top pb-safe-bottom">
         {/* Header */}
         <motion.header
@@ -83,7 +80,7 @@ export default function ProfilesPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.1 }}
-              className="text-sm text-latte font-medium"
+              className="text-sm text-warm-gray font-medium font-body"
             >
               {household?.name || 'My Household'}
             </motion.p>
@@ -91,10 +88,10 @@ export default function ProfilesPage() {
 
           <button
             onClick={() => setIsManaging(!isManaging)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors font-body ${
               isManaging
-                ? 'bg-terracotta text-white'
-                : 'text-latte hover:text-espresso hover:bg-parchment'
+                ? 'bg-clay text-white shadow-sm'
+                : 'text-warm-gray hover:text-charcoal hover:bg-cream-dark'
             }`}
           >
             {isManaging ? 'Done' : 'Manage'}
@@ -108,10 +105,10 @@ export default function ProfilesPage() {
           transition={{ delay: 0.15 }}
           className="text-center mb-12"
         >
-          <h1 className="font-display text-3xl md:text-4xl font-bold text-espresso mb-2">
+          <h1 className="font-display text-3xl md:text-4xl font-bold text-charcoal mb-2">
             Who&apos;s cooking today?
           </h1>
-          <p className="text-latte">
+          <p className="text-warm-gray font-body">
             Select your profile to continue
           </p>
         </motion.div>
@@ -150,12 +147,12 @@ export default function ProfilesPage() {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => setIsCreating(true)}
-                  className="flex flex-col items-center gap-3 p-4 rounded-2xl border-2 border-dashed border-clay/20 hover:border-terracotta/50 hover:bg-parchment/30 transition-colors group"
+                  className="flex flex-col items-center gap-3 p-4 rounded-2xl border-2 border-dashed border-clay-light hover:border-clay hover:bg-cream-dark/50 transition-colors group"
                 >
-                  <div className="w-24 h-24 rounded-full border-2 border-dashed border-clay/20 group-hover:border-terracotta/50 flex items-center justify-center transition-colors">
-                    <Plus className="w-10 h-10 text-latte group-hover:text-terracotta transition-colors" />
+                  <div className="w-24 h-24 rounded-full border-2 border-dashed border-clay-light group-hover:border-clay flex items-center justify-center transition-colors bg-white/50">
+                    <Plus className="w-10 h-10 text-clay-light group-hover:text-clay transition-colors" />
                   </div>
-                  <span className="font-display text-lg font-semibold text-latte group-hover:text-terracotta transition-colors">
+                  <span className="font-display text-lg font-semibold text-warm-gray group-hover:text-clay transition-colors">
                     Add Profile
                   </span>
                 </motion.button>
@@ -173,7 +170,7 @@ export default function ProfilesPage() {
         >
           <button
             onClick={exitProfile}
-            className="flex items-center gap-2 px-4 py-2 text-sm text-latte hover:text-cayenne transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-sm text-warm-gray hover:text-tomato transition-colors font-body"
           >
             <LogOut size={16} />
             Sign out of {household?.name || 'Household'}

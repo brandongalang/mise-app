@@ -26,12 +26,12 @@ export const MessageBubble = React.memo(function MessageBubble({ message, isStre
         <div className={cn("flex w-full gap-3", isUser ? "justify-end" : "justify-start")}>
             {/* Avatar for assistant */}
             {!isUser && (
-                <div className="flex-shrink-0 w-8 h-8 rounded-xl bg-gradient-to-br from-terracotta/20 to-marigold/20 flex items-center justify-center">
-                    <ChefHat className="w-4 h-4 text-terracotta" />
+                <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-cream-dark border border-clay-light flex items-center justify-center">
+                    <ChefHat className="w-4 h-4 text-clay" />
                 </div>
             )}
 
-            <div className="max-w-[80%] space-y-2">
+            <div className="max-w-[85%] space-y-2">
                 {/* Tool Calls (shown before message content) */}
                 {hasToolCalls && (
                     <motion.div
@@ -46,10 +46,10 @@ export const MessageBubble = React.memo(function MessageBubble({ message, isStre
                 {(hasContent || isUser || message.attachments?.length) && (
                     <motion.div
                         className={cn(
-                            "px-5 py-4 shadow-sm relative overflow-hidden",
+                            "px-4 py-3 shadow-sm relative overflow-hidden",
                             isUser
-                                ? "bg-terracotta text-white rounded-2xl rounded-tr-sm"
-                                : "texture-paper bg-bg-secondary border border-border-subtle text-text-primary rounded-2xl rounded-tl-sm"
+                                ? "bg-herb text-white rounded-2xl rounded-tr-sm"
+                                : "bg-white border border-clay-light text-charcoal rounded-2xl rounded-tl-sm"
                         )}
                         initial={{ scale: 0.95, opacity: 0 }}
                         animate={{ scale: 1, opacity: 1 }}
@@ -62,8 +62,8 @@ export const MessageBubble = React.memo(function MessageBubble({ message, isStre
                                     <div
                                         key={i}
                                         className={cn(
-                                            "relative w-20 h-20 rounded-lg overflow-hidden shadow-sm",
-                                            isUser ? "border border-white/20" : "border border-border-strong"
+                                            "relative w-16 h-16 rounded-lg overflow-hidden shadow-sm",
+                                            isUser ? "border border-white/20" : "border border-clay-light"
                                         )}
                                     >
                                         <Image
@@ -81,7 +81,7 @@ export const MessageBubble = React.memo(function MessageBubble({ message, isStre
                         {hasContent && (
                             <div className={cn(
                                 "text-[16px] leading-relaxed relative z-10 font-body",
-                                isUser ? "text-white whitespace-pre-wrap font-medium" : "text-text-primary"
+                                isUser ? "text-white whitespace-pre-wrap font-medium" : "text-charcoal"
                             )}>
                                 {isUser ? (
                                     // Plain text for user messages
@@ -119,8 +119,8 @@ export const MessageBubble = React.memo(function MessageBubble({ message, isStre
 
             {/* Avatar for user */}
             {isUser && (
-                <div className="flex-shrink-0 w-8 h-8 rounded-xl bg-terracotta/10 flex items-center justify-center">
-                    <User className="w-4 h-4 text-terracotta" />
+                <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-herb/10 flex items-center justify-center">
+                    <User className="w-4 h-4 text-herb" />
                 </div>
             )}
         </div>

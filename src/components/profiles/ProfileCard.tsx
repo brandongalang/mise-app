@@ -20,11 +20,11 @@ export function ProfileCard({ profile, isManaging, onSelect, onEdit }: ProfileCa
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
-      whileHover={{ scale: 1.08, y: -4 }}
+      whileHover={{ scale: 1.05, y: -2 }}
       whileTap={{ scale: 0.95 }}
       transition={{ type: 'spring', stiffness: 400, damping: 25 }}
       onClick={isManaging ? onEdit : onSelect}
-      className="group flex flex-col items-center gap-3 p-4 rounded-2xl hover:bg-parchment/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-terracotta"
+      className="group flex flex-col items-center gap-3 p-4 rounded-2xl hover:bg-cream-dark transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-clay"
       aria-label={
         isManaging
           ? `Edit ${profile.display_name}'s profile`
@@ -34,7 +34,7 @@ export function ProfileCard({ profile, isManaging, onSelect, onEdit }: ProfileCa
       {/* Avatar */}
       <div className="relative" aria-hidden="true">
         <div
-          className={`w-24 h-24 rounded-full ${AVATAR_COLORS[profile.avatar_color]} flex items-center justify-center shadow-lg transition-shadow group-hover:shadow-xl`}
+          className={`w-24 h-24 rounded-full ${AVATAR_COLORS[profile.avatar_color]} flex items-center justify-center shadow-sm border-2 border-white transition-shadow group-hover:shadow-md`}
         >
           <span className="text-4xl font-display font-bold text-white select-none">
             {profile.display_name.charAt(0).toUpperCase()}
@@ -46,7 +46,7 @@ export function ProfileCard({ profile, isManaging, onSelect, onEdit }: ProfileCa
           <motion.div
             initial={{ opacity: 0 }}
             whileHover={{ opacity: 1 }}
-            className="absolute inset-0 flex items-center justify-center bg-espresso/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+            className="absolute inset-0 flex items-center justify-center bg-charcoal/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm"
           >
             <Lock className="w-8 h-8 text-white" />
           </motion.div>
@@ -57,7 +57,7 @@ export function ProfileCard({ profile, isManaging, onSelect, onEdit }: ProfileCa
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="absolute inset-0 flex items-center justify-center bg-espresso/60 rounded-full"
+            className="absolute inset-0 flex items-center justify-center bg-charcoal/60 rounded-full backdrop-blur-sm"
           >
             <Pencil className="w-8 h-8 text-white" />
           </motion.div>
@@ -69,7 +69,7 @@ export function ProfileCard({ profile, isManaging, onSelect, onEdit }: ProfileCa
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.2, type: 'spring', stiffness: 500 }}
-            className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-marigold flex items-center justify-center shadow-md"
+            className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-clay flex items-center justify-center shadow-md border border-white"
           >
             <span className="text-xs font-bold text-white">A</span>
           </motion.div>
@@ -77,7 +77,7 @@ export function ProfileCard({ profile, isManaging, onSelect, onEdit }: ProfileCa
       </div>
 
       {/* Name */}
-      <span className="font-display text-lg font-semibold text-espresso">
+      <span className="font-display text-lg font-semibold text-charcoal group-hover:text-clay transition-colors">
         {profile.display_name}
       </span>
     </motion.button>
