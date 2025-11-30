@@ -84,10 +84,6 @@ export function useChat(): UseChatReturn {
                 attachments: m.attachments,
             }));
 
-            // ... (imports)
-
-            // ... (inside useChat)
-
             // Map to API message format
             const apiMessages = conversationHistory.map(msg => {
                 const contentParts: ({ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } })[] = [{ type: 'text', text: msg.content }];
@@ -109,7 +105,23 @@ export function useChat(): UseChatReturn {
                 };
             });
 
-            // ... (rest of the function)
+            let currentContent = '';
+            let toolCallsState: ToolCall[] = [];
+
+            const ensureAssistantMessage = () => {
+                setMessages(prev => {
+                    if (prev.some(m => m.id === assistantMessageId)) return prev;
+                    return [
+                        ...prev,
+                        {
+                            id: assistantMessageId,
+                            role: 'assistant',
+                            content: '',
+                            timestamp: new Date(),
+                        },
+                    ];
+                });
+            };
 
             const response = await apiClient.fetchRaw('/api/v1/chat', {
                 method: 'POST',
