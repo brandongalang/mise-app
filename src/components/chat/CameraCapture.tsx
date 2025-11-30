@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, X, RotateCcw, Check, SwitchCamera } from 'lucide-react';
+import { Camera, X, RotateCcw, Check, SwitchCamera, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface CameraCaptureProps {
@@ -20,6 +20,7 @@ export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSupported, setIsSupported] = useState(true);
+    const [flash, setFlash] = useState(false);
 
     // Check if camera API is supported
     useEffect(() => {
@@ -66,10 +67,19 @@ export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps
 
             if (videoRef.current) {
                 videoRef.current.srcObject = mediaStream;
-                await videoRef.current.play();
+                // Wait for video to be ready to play
+                videoRef.current.onloadedmetadata = async () => {
+                    try {
+                        await videoRef.current?.play();
+                        setIsLoading(false);
+                    } catch (e) {
+                        console.error("Error playing video:", e);
+                    }
+                };
             }
         } catch (err) {
             console.error('Camera error:', err);
+            setIsLoading(false);
             if (err instanceof DOMException) {
                 switch (err.name) {
                     case 'NotAllowedError':
@@ -90,8 +100,6 @@ export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps
             } else {
                 setError('Could not access camera.');
             }
-        } finally {
-            setIsLoading(false);
         }
     }, [facingMode, isSupported, stopStream]);
 
@@ -125,7 +133,7 @@ export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps
         if (isOpen && !capturedImage && isSupported) {
             startCamera();
         }
-    }, [facingMode]); // eslint-disable-line react-hooks/exhaustive-deps -- intentionally only re-run on facingMode change
+    }, [facingMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Capture photo
     const capturePhoto = useCallback(() => {
@@ -136,6 +144,10 @@ export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps
         const ctx = canvas.getContext('2d');
 
         if (!ctx) return;
+
+        // Flash effect
+        setFlash(true);
+        setTimeout(() => setFlash(false), 150);
 
         // Set canvas size to match video
         canvas.width = video.videoWidth;
@@ -174,21 +186,36 @@ export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="modal-fullscreen z-50 bg-espresso/95 flex flex-col"
+                className="modal-fullscreen z-50 bg-black flex flex-col"
             >
+                {/* Flash Animation */}
+                <AnimatePresence>
+                    {flash && (
+                        <motion.div
+                            initial={{ opacity: 0.8 }}
+                            animate={{ opacity: 0 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                            className="absolute inset-0 bg-white z-[60] pointer-events-none"
+                        />
+                    )}
+                </AnimatePresence>
+
                 {/* Header */}
-                <div className="flex items-center justify-between p-4 pt-safe-top">
+                <div className="flex items-center justify-between p-4 pt-safe-top z-10 relative">
                     <button
                         onClick={handleClose}
-                        className="p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+                        className="p-2 rounded-full bg-black/20 text-white backdrop-blur-md border border-white/10 hover:bg-black/40 transition-colors"
                         aria-label="Close camera"
                     >
                         <X size={24} />
                     </button>
-                    <h2 className="text-white font-semibold">Take Photo</h2>
+                    <h2 className="text-white font-medium text-lg drop-shadow-md">
+                        {capturedImage ? 'Review Photo' : 'Take Photo'}
+                    </h2>
                     <button
                         onClick={switchCamera}
-                        className="p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors disabled:opacity-50"
+                        className="p-2 rounded-full bg-black/20 text-white backdrop-blur-md border border-white/10 hover:bg-black/40 transition-colors disabled:opacity-0"
                         disabled={!!capturedImage || !isSupported}
                         aria-label="Switch camera"
                     >
@@ -197,8 +224,8 @@ export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps
                 </div>
 
                 {/* Camera View / Preview */}
-                <div className="flex-1 relative overflow-hidden">
-                    {/* Video element always rendered to ensure ref is available during initialization */}
+                <div className="flex-1 relative overflow-hidden bg-black">
+                    {/* Video element */}
                     <video
                         ref={videoRef}
                         autoPlay
@@ -206,77 +233,94 @@ export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps
                         muted
                         className={cn(
                             "absolute inset-0 w-full h-full object-cover",
-                            (isLoading || capturedImage || error) && "invisible"
+                            // Only hide if we have a captured image, otherwise show (even if loading, it might just be black)
+                            capturedImage ? "invisible" : "visible"
                         )}
                     />
 
-                    {error ? (
-                        <div className="absolute inset-0 flex items-center justify-center p-8">
+                    {/* Error State */}
+                    {error && (
+                        <div className="absolute inset-0 flex items-center justify-center p-8 z-20 bg-black/80">
                             <div className="text-center">
-                                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-cayenne/20 flex items-center justify-center">
-                                    <Camera className="w-8 h-8 text-cayenne" />
+                                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/20 flex items-center justify-center">
+                                    <Camera className="w-8 h-8 text-red-500" />
                                 </div>
                                 <p className="text-white/80 mb-4">{error}</p>
                                 {isSupported && (
                                     <button
                                         onClick={startCamera}
-                                        className="px-4 py-2 bg-terracotta text-white rounded-full hover:bg-terracotta-dark transition-colors"
+                                        className="px-6 py-2 bg-white text-black rounded-full font-medium hover:bg-gray-100 transition-colors"
                                     >
                                         Try Again
                                     </button>
                                 )}
                             </div>
                         </div>
-                    ) : isLoading ? (
-                        <div className="absolute inset-0 flex items-center justify-center">
+                    )}
+
+                    {/* Loading State */}
+                    {isLoading && !error && !capturedImage && (
+                        <div className="absolute inset-0 flex items-center justify-center z-20">
                             <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin" />
                         </div>
-                    ) : capturedImage ? (
-                        <motion.img
-                            initial={{ scale: 0.95, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            src={capturedImage}
-                            alt="Captured"
-                            className="absolute inset-0 w-full h-full object-contain"
-                        />
-                    ) : null}
+                    )}
+
+                    {/* Captured Image Preview */}
+                    {capturedImage && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="absolute inset-0 z-10 bg-black"
+                        >
+                            <img
+                                src={capturedImage}
+                                alt="Captured"
+                                className="w-full h-full object-contain"
+                            />
+                        </motion.div>
+                    )}
 
                     {/* Hidden canvas for capture */}
                     <canvas ref={canvasRef} className="hidden" />
 
-                    {/* Camera frame overlay */}
+                    {/* Camera Guides (only in live view) */}
                     {!capturedImage && !error && !isLoading && (
-                        <div className="absolute inset-8 border-2 border-white/30 rounded-2xl pointer-events-none">
-                            <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-white rounded-tl-xl" />
-                            <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-white rounded-tr-xl" />
-                            <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-white rounded-bl-xl" />
-                            <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-white rounded-br-xl" />
+                        <div className="absolute inset-0 pointer-events-none opacity-30">
+                            <div className="absolute inset-x-0 top-1/3 h-px bg-white/50" />
+                            <div className="absolute inset-x-0 top-2/3 h-px bg-white/50" />
+                            <div className="absolute inset-y-0 left-1/3 w-px bg-white/50" />
+                            <div className="absolute inset-y-0 right-1/3 w-px bg-white/50" />
                         </div>
                     )}
                 </div>
 
                 {/* Bottom Controls */}
-                <div className="p-6 pb-safe-bottom">
+                <div className="p-8 pb-safe-bottom bg-black z-10">
                     {capturedImage ? (
-                        <div className="flex items-center justify-center gap-8">
+                        <div className="flex items-center justify-between max-w-xs mx-auto">
                             <motion.button
-                                initial={{ scale: 0 }}
-                                animate={{ scale: 1 }}
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
                                 onClick={retakePhoto}
-                                className="p-4 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
-                                aria-label="Retake photo"
+                                className="flex flex-col items-center gap-2 text-white/80 hover:text-white transition-colors"
                             >
-                                <RotateCcw size={28} />
+                                <div className="p-4 rounded-full bg-white/10 border border-white/10">
+                                    <RotateCcw size={24} />
+                                </div>
+                                <span className="text-sm font-medium">Retake</span>
                             </motion.button>
+
                             <motion.button
-                                initial={{ scale: 0 }}
-                                animate={{ scale: 1 }}
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
                                 transition={{ delay: 0.1 }}
                                 onClick={confirmPhoto}
-                                className="p-5 rounded-full bg-sage text-white hover:bg-sage/90 transition-colors shadow-lg"
-                                aria-label="Use this photo"
+                                className="flex flex-col items-center gap-2 text-primary-foreground"
                             >
-                                <Check size={32} />
+                                <div className="p-5 rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 transition-colors">
+                                    <Check size={32} />
+                                </div>
+                                <span className="text-sm font-medium text-white">Use Photo</span>
                             </motion.button>
                         </div>
                     ) : (
@@ -285,16 +329,15 @@ export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps
                                 onClick={capturePhoto}
                                 disabled={isLoading || !!error || !isSupported}
                                 className={cn(
-                                    "w-20 h-20 rounded-full border-4 border-white flex items-center justify-center",
-                                    "transition-all duration-200",
+                                    "w-20 h-20 rounded-full border-4 border-white flex items-center justify-center relative group",
                                     isLoading || error || !isSupported
-                                        ? "opacity-50"
-                                        : "hover:scale-105 active:scale-95"
+                                        ? "opacity-50 cursor-not-allowed"
+                                        : "cursor-pointer"
                                 )}
                                 whileTap={{ scale: 0.9 }}
                                 aria-label="Take photo"
                             >
-                                <div className="w-16 h-16 rounded-full bg-white" />
+                                <div className="w-16 h-16 rounded-full bg-white transition-transform group-hover:scale-95" />
                             </motion.button>
                         </div>
                     )}
