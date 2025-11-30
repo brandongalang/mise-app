@@ -90,7 +90,7 @@ export function useChat(): UseChatReturn {
 
             // Map to API message format
             const apiMessages = conversationHistory.map(msg => {
-                const contentParts: (string | { type: string; image_url: { url: string } })[] = [{ type: 'text', text: msg.content }];
+                const contentParts: ({ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } })[] = [{ type: 'text', text: msg.content }];
                 if (msg.attachments && msg.attachments.length > 0) {
                     msg.attachments.forEach(att => {
                         if (att.type === 'image' && att.data) {
