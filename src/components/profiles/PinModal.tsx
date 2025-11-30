@@ -44,15 +44,22 @@ export function PinModal({ profile, open, onClose, onSuccess, onValidate }: PinM
   // Reset state and cleanup timeouts when closed
   useEffect(() => {
     if (!open) {
-      setPin('');
-      setIsShaking(false);
-      setIsValidating(false);
-      setErrorMessage(null);
-      setAttemptsRemaining(null);
-      setLockedUntil(null);
-      setLockCountdown(0);
+      // Use a timeout to avoid setting state during render/effect cycle immediately
+      // or just ensure we don't do it if we are unmounting
+      const timer = setTimeout(() => {
+        setPin('');
+        setIsShaking(false);
+        setIsValidating(false);
+        setErrorMessage(null);
+        setAttemptsRemaining(null);
+        setLockedUntil(null);
+        setLockCountdown(0);
+      }, 0);
+
       timeoutRefs.current.forEach(id => clearTimeout(id));
       timeoutRefs.current.clear();
+
+      return () => clearTimeout(timer);
     }
   }, [open]);
 
