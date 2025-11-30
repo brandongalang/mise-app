@@ -1,5 +1,7 @@
 'use client';
 
+import React from 'react';
+
 import { Message, RecipeCard } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
@@ -15,7 +17,7 @@ interface MessageBubbleProps {
     onRecipeExpand?: (recipe: RecipeCard) => void;
 }
 
-export function MessageBubble({ message, isStreaming = false, onRecipeExpand }: MessageBubbleProps) {
+export const MessageBubble = React.memo(function MessageBubble({ message, isStreaming = false, onRecipeExpand }: MessageBubbleProps) {
     const isUser = message.role === 'user';
     const hasToolCalls = !isUser && message.toolCalls && message.toolCalls.length > 0;
     const hasContent = message.content && message.content.trim().length > 0;
@@ -44,10 +46,10 @@ export function MessageBubble({ message, isStreaming = false, onRecipeExpand }: 
                 {(hasContent || isUser || message.attachments?.length) && (
                     <motion.div
                         className={cn(
-                            "px-4 py-3 shadow-sm",
+                            "px-5 py-4 shadow-sm relative overflow-hidden",
                             isUser
-                                ? "bg-terracotta text-white rounded-2xl rounded-tr-md"
-                                : "bg-warm-white border border-clay/15 text-espresso rounded-2xl rounded-tl-md"
+                                ? "bg-terracotta text-white rounded-2xl rounded-tr-sm"
+                                : "texture-paper bg-bg-secondary border border-border-subtle text-text-primary rounded-2xl rounded-tl-sm"
                         )}
                         initial={{ scale: 0.95, opacity: 0 }}
                         animate={{ scale: 1, opacity: 1 }}
@@ -55,13 +57,13 @@ export function MessageBubble({ message, isStreaming = false, onRecipeExpand }: 
                     >
                         {/* Attachments */}
                         {message.attachments && message.attachments.length > 0 && (
-                            <div className="flex gap-2 mb-3 flex-wrap">
+                            <div className="flex gap-2 mb-3 flex-wrap relative z-10">
                                 {message.attachments.map((att, i) => (
                                     <div
                                         key={i}
                                         className={cn(
-                                            "relative w-20 h-20 rounded-lg overflow-hidden",
-                                            isUser ? "border border-white/20" : "border border-clay/20"
+                                            "relative w-20 h-20 rounded-lg overflow-hidden shadow-sm",
+                                            isUser ? "border border-white/20" : "border border-border-strong"
                                         )}
                                     >
                                         <Image
@@ -78,8 +80,8 @@ export function MessageBubble({ message, isStreaming = false, onRecipeExpand }: 
                         {/* Message Content */}
                         {hasContent && (
                             <div className={cn(
-                                "text-[15px] leading-relaxed",
-                                isUser ? "text-white whitespace-pre-wrap" : "text-espresso"
+                                "text-[16px] leading-relaxed relative z-10 font-body",
+                                isUser ? "text-white whitespace-pre-wrap font-medium" : "text-text-primary"
                             )}>
                                 {isUser ? (
                                     // Plain text for user messages
@@ -123,4 +125,13 @@ export function MessageBubble({ message, isStreaming = false, onRecipeExpand }: 
             )}
         </div>
     );
-}
+}, (prevProps, nextProps) => {
+    // Custom comparison for performance
+    return (
+        prevProps.isStreaming === nextProps.isStreaming &&
+        prevProps.message.id === nextProps.message.id &&
+        prevProps.message.content === nextProps.message.content &&
+        prevProps.message.toolCalls?.length === nextProps.message.toolCalls?.length &&
+        prevProps.message.actionCard === nextProps.message.actionCard
+    );
+});

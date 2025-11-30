@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { InventorySummary, InventoryItem } from '@/lib/types';
 import { api } from '@/db/supabase';
+import { api as apiClient } from '@/lib/api-client';
+import { addInventory } from '@/agent/tools/inventory';
+import { toast } from 'sonner';
 
 interface UseInventoryReturn {
     summary: InventorySummary | null;
@@ -9,6 +12,7 @@ interface UseInventoryReturn {
     refetch: () => void;
     fetchExpiringItems: () => Promise<InventoryItem[]>;
     fetchLeftovers: () => Promise<InventoryItem[]>;
+    addItemsOptimistically: (items: any[]) => Promise<void>;
 }
 
 export function useInventory(): UseInventoryReturn {
@@ -17,22 +21,17 @@ export function useInventory(): UseInventoryReturn {
     const [error, setError] = useState<Error | null>(null);
 
     const fetchInventory = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
         try {
-            setIsLoading(true);
-            setError(null);
-            const response = await fetch('/api/v1/inventory/summary');
-            if (!response.ok) {
-                throw new Error('Failed to fetch inventory summary');
-            }
-            const data = await response.json();
+            const data = await apiClient.get<any>('/api/v1/inventory/summary');
 
             // Map API response to match client type expectations
-            // We need to ensure 'id' and 'quantity' are present and 'daysUntilExpiry' is a number
             const mapItem = (item: any) => ({
                 ...item,
                 id: item.containerId,
                 quantity: item.remainingQty,
-                daysUntilExpiry: item.daysUntilExpiry ?? 0, // Default to 0 if null
+                daysUntilExpiry: item.daysUntilExpiry ?? 0,
                 expiresAt: item.expiresAt ? new Date(item.expiresAt) : null,
                 createdAt: item.createdAt ? new Date(item.createdAt) : new Date(),
             });
@@ -52,7 +51,8 @@ export function useInventory(): UseInventoryReturn {
 
             setSummary(mappedSummary);
         } catch (err) {
-            setError(err instanceof Error ? err : new Error('Unknown error'));
+            console.error('Failed to fetch inventory:', err);
+            setError(new Error('Failed to load inventory'));
         } finally {
             setIsLoading(false);
         }
@@ -62,7 +62,7 @@ export function useInventory(): UseInventoryReturn {
     const mapDbItemToInventoryItem = (raw: any): InventoryItem => {
         const content = raw.contents?.[0];
         const master = raw.master_ingredients;
-        
+
         const now = new Date();
         const expiry = raw.expires_at ? new Date(raw.expires_at) : null;
         const diffTime = expiry ? expiry.getTime() - now.getTime() : 0;
@@ -92,12 +92,12 @@ export function useInventory(): UseInventoryReturn {
     const fetchExpiringItems = useCallback(async (): Promise<InventoryItem[]> => {
         const expiringDate = new Date();
         expiringDate.setDate(expiringDate.getDate() + 3);
-        
+
         const data = await api.containers.findActive({
             statuses: ['SEALED', 'OPEN', 'LOW'],
             expiringBefore: expiringDate
         });
-        
+
         return data.map(mapDbItemToInventoryItem);
     }, []);
 
@@ -108,11 +108,74 @@ export function useInventory(): UseInventoryReturn {
         const data = await api.containers.findActive({
             statuses: ['SEALED', 'OPEN', 'LOW'],
         });
-        
+
         return data
             .filter((item: any) => !!item.dish_name) // Filter for leftovers
             .map(mapDbItemToInventoryItem);
     }, []);
+
+    const addItemsOptimistically = useCallback(async (items: any[]) => {
+        // 1. Optimistic Update
+        const tempItems: InventoryItem[] = items.map(item => ({
+            id: `temp-${Date.now()}-${Math.random()}`,
+            containerId: `temp-${Date.now()}-${Math.random()}`,
+            masterId: 'temp',
+            name: item.name,
+            quantity: item.contents.quantity,
+            remainingQty: item.contents.quantity,
+            unit: item.contents.unit,
+            category: item.category || 'unknown',
+            status: item.container.status || 'SEALED',
+            purchaseUnit: item.container.unit,
+            expiresAt: item.expiresAt || null,
+            daysUntilExpiry: item.expiresAt ? Math.ceil((item.expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 0,
+            isLeftover: false,
+            dishName: null,
+            createdAt: new Date(),
+            source: item.source,
+            confidence: item.confidence
+        }));
+
+        // Update local state immediately
+        setSummary(prev => {
+            if (!prev) return null;
+            const newCategories = { ...prev.categories } as Record<string, { items: InventoryItem[], count: number }>;
+
+            tempItems.forEach(item => {
+                const cat = item.category || 'unknown';
+                if (!newCategories[cat]) {
+                    newCategories[cat] = { items: [], count: 0 };
+                }
+                newCategories[cat] = {
+                    ...newCategories[cat],
+                    items: [...newCategories[cat].items, item],
+                    count: newCategories[cat].count + 1
+                };
+            });
+
+            return {
+                ...prev,
+                categories: newCategories
+            };
+        });
+
+        toast.success(`Saved ${items.length} items to inventory`);
+
+        try {
+            // 2. API Call
+            await addInventory(items);
+
+            // 3. Refetch to get real IDs and data
+            await fetchInventory();
+        } catch (err) {
+            console.error("Failed to save inventory:", err);
+            toast.error("Failed to save items. Rolling back changes.");
+
+            // 4. Rollback
+            await fetchInventory();
+            throw err;
+        }
+    }, [fetchInventory]);
 
     useEffect(() => {
         fetchInventory();
@@ -124,6 +187,7 @@ export function useInventory(): UseInventoryReturn {
         error,
         refetch: fetchInventory,
         fetchExpiringItems,
-        fetchLeftovers
+        fetchLeftovers,
+        addItemsOptimistically
     };
 }

@@ -1,5 +1,7 @@
 'use client';
 
+import React from 'react';
+
 import { InventoryItem as IInventoryItem, IngredientCategory } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Apple, Beef, Milk, Package, Snowflake, Coffee, ChevronRight } from 'lucide-react';
@@ -30,7 +32,7 @@ const CATEGORY_COLORS: Record<IngredientCategory, string> = {
     unknown: 'bg-warm-gray/15 text-warm-gray',
 };
 
-export function InventoryItem({ item, onTap, compact = false }: InventoryItemProps) {
+export const InventoryItem = React.memo(function InventoryItem({ item, onTap, compact = false }: InventoryItemProps) {
     const days = item.daysUntilExpiry ?? 99;
 
     // Expiry status
@@ -42,19 +44,19 @@ export function InventoryItem({ item, onTap, compact = false }: InventoryItemPro
         urgent: {
             text: 'text-cayenne',
             dot: 'status-dot-urgent',
-            bg: 'bg-cayenne/5',
+            bg: 'bg-cayenne/5 border-cayenne/20',
             label: days <= 0 ? 'Expired' : `${days}d left`
         },
         warning: {
             text: 'text-marigold',
             dot: 'status-dot-warning',
-            bg: 'bg-marigold/5',
+            bg: 'bg-marigold/5 border-marigold/20',
             label: `${days}d left`
         },
         ok: {
             text: 'text-sage',
             dot: 'status-dot-ok',
-            bg: 'bg-transparent',
+            bg: 'bg-transparent border-transparent',
             label: `${days}d`
         }
     }[expiryStatus];
@@ -64,30 +66,33 @@ export function InventoryItem({ item, onTap, compact = false }: InventoryItemPro
     const categoryColor = CATEGORY_COLORS[category] || 'bg-parchment text-latte';
 
     return (
-        <div
+        <button
             onClick={onTap}
             className={cn(
-                "group card-elevated card-interactive cursor-pointer overflow-hidden",
-                expiryConfig.bg,
+                "group relative w-full text-left overflow-hidden transition-all duration-300",
+                "texture-paper bg-bg-secondary border border-border-subtle rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5",
+                "focus:outline-none focus:ring-2 focus:ring-terracotta/50 focus:ring-offset-2",
+                expiryStatus !== 'ok' && expiryConfig.bg,
                 compact ? "p-3" : "p-4"
             )}
+            aria-label={`${item.name}, ${item.remainingQty} ${item.unit}, ${expiryConfig.label}`}
         >
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 relative z-10">
                 {/* Category Icon */}
                 <div className={cn(
-                    "flex-shrink-0 rounded-xl flex items-center justify-center",
+                    "flex-shrink-0 rounded-lg flex items-center justify-center shadow-inner",
                     categoryColor,
                     compact ? "w-10 h-10" : "w-12 h-12"
-                )}>
-                    <Icon className={compact ? "w-5 h-5" : "w-6 h-6"} />
+                )} aria-hidden="true">
+                    <Icon className={compact ? "w-5 h-5" : "w-6 h-6"} strokeWidth={1.5} />
                 </div>
 
                 {/* Content */}
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
                         <h4 className={cn(
-                            "font-semibold text-espresso truncate",
-                            compact ? "text-sm" : "text-base"
+                            "font-display font-bold text-text-primary truncate tracking-tight",
+                            compact ? "text-base" : "text-lg"
                         )}>
                             {item.name}
                         </h4>
@@ -96,27 +101,28 @@ export function InventoryItem({ item, onTap, compact = false }: InventoryItemPro
                         <div className={cn(
                             "flex items-center gap-1.5 flex-shrink-0",
                             expiryConfig.text
-                        )}>
+                        )} aria-label={`Expires in ${expiryConfig.label}`}>
                             <div className={cn("status-dot", expiryConfig.dot)} />
-                            <span className="text-xs font-bold">{expiryConfig.label}</span>
+                            <span className="text-xs font-bold font-body tracking-wide uppercase" aria-hidden="true">{expiryConfig.label}</span>
                         </div>
                     </div>
 
                     {/* Meta row */}
                     <div className="flex items-center justify-between mt-1">
-                        <div className="flex items-center gap-2 text-xs text-latte">
+                        <div className="flex items-center gap-2 text-sm text-text-secondary font-body">
                             <span>{item.remainingQty} {item.unit}</span>
                             {item.status === 'OPEN' && (
-                                <span className="badge badge-warning">OPEN</span>
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-marigold bg-marigold/10 px-1.5 py-0.5 rounded-sm border border-marigold/20">
+                                    OPEN
+                                </span>
                             )}
                         </div>
 
                         {/* Chevron on hover */}
-                        <ChevronRight className="w-4 h-4 text-warm-gray-light opacity-0 group-hover:opacity-100 transition-opacity -mr-1" />
+                        <ChevronRight className="w-4 h-4 text-text-tertiary opacity-0 group-hover:opacity-100 transition-opacity -mr-1" aria-hidden="true" />
                     </div>
-
                 </div>
             </div>
-        </div>
+        </button>
     );
-}
+});

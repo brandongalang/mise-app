@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback } from 'react';
 import { Message, Attachment, ToolCall, ToolStatus } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
+import { parseSSEStream } from '@/lib/sse-parser';
+import { api as apiClient } from '@/lib/api-client';
 
 interface UseChatReturn {
     messages: Message[];
@@ -82,140 +84,117 @@ export function useChat(): UseChatReturn {
                 attachments: m.attachments,
             }));
 
-            const response = await fetch('/api/v1/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    message: text,
-                    attachments,
-                    conversationHistory,
-                }),
-                signal: abortControllerRef.current.signal,
+            // Map to API message format
+            const apiMessages = conversationHistory.map(msg => {
+                const contentParts: ({ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } })[] = [{ type: 'text', text: msg.content }];
+                if (msg.attachments && msg.attachments.length > 0) {
+                    msg.attachments.forEach(att => {
+                        if (att.type === 'image' && att.data) {
+                            // Construct data URI
+                            const dataUri = att.data.startsWith('data:')
+                                ? att.data
+                                : `data:${att.mimeType};base64,${att.data}`;
+
+                            contentParts.push({ type: 'image_url', image_url: { url: dataUri } });
+                        }
+                    });
+                }
+                return {
+                    role: msg.role,
+                    content: contentParts,
+                };
             });
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || `Request failed with status ${response.status}`);
-            }
+            let currentContent = '';
+            let toolCallsState: ToolCall[] = [];
 
-            if (!response.body) {
-                throw new Error('No response body');
-            }
-
-            // Don't create assistant message until we have content
-            let assistantMessageCreated = false;
             const ensureAssistantMessage = () => {
-                if (!assistantMessageCreated) {
-                    assistantMessageCreated = true;
-                    setMessages(prev => [
+                setMessages(prev => {
+                    if (prev.some(m => m.id === assistantMessageId)) return prev;
+                    return [
                         ...prev,
                         {
                             id: assistantMessageId,
                             role: 'assistant',
                             content: '',
                             timestamp: new Date(),
-                            toolCalls: [],
                         },
-                    ]);
-                }
+                    ];
+                });
             };
 
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let currentContent = '';
-            let buffer = '';
-            let toolCallsState: ToolCall[] = [];
+            const response = await apiClient.fetchRaw('/api/v1/chat', {
+                method: 'POST',
+                body: JSON.stringify({
+                    messages: apiMessages,
+                    model: 'gpt-4o',
+                }),
+                signal: abortControllerRef.current?.signal,
+                retries: 2
+            });
 
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
+            if (!response.body) throw new Error('No response body');
 
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n');
-                buffer = lines.pop() || '';
+            // Handle SSE stream
+            await parseSSEStream({
+                stream: response.body,
+                signal: abortControllerRef.current?.signal,
+                onThinking: (text: string) => {
+                    setIsThinking(true);
+                    setThinkingText(text);
+                },
+                onContent: (content: string) => {
+                    ensureAssistantMessage();
+                    setIsThinking(false);
+                    setThinkingText(''); // Clear thinking text once content starts
+                    setIsStreaming(true);
 
-                let currentEvent = '';
+                    // Accumulate content for the current message
+                    currentContent += content;
 
-                for (const line of lines) {
-                    if (line.startsWith('event: ')) {
-                        currentEvent = line.slice(7).trim();
-                    } else if (line.startsWith('data: ')) {
-                        try {
-                            const data = JSON.parse(line.slice(6));
+                    updateMessage(assistantMessageId, { content: currentContent });
+                },
+                onToolCall: (toolCall: ToolCall) => {
+                    ensureAssistantMessage();
+                    setIsThinking(false);
+                    setThinkingText(''); // Clear thinking text once tool call starts
+                    setIsStreaming(true); // Tool calls are part of streaming response
 
-                            switch (currentEvent) {
-                                case 'thinking':
-                                    setThinkingText(data.status);
-                                    break;
+                    // Update tool calls state
+                    const existingCallIndex = toolCallsState.findIndex(tc => tc.id === toolCall.id);
 
-                                case 'tool_start': {
-                                    ensureAssistantMessage();
-                                    const newTool: ToolCall = {
-                                        id: data.id || uuidv4(),
-                                        name: data.name,
-                                        args: data.args,
-                                        status: 'running',
-                                        startTime: new Date(),
-                                    };
-                                    toolCallsState = [...toolCallsState, newTool];
-                                    setActiveTools(toolCallsState);
-                                    setThinkingText(`Running ${data.name}...`);
-                                    updateMessage(assistantMessageId, { toolCalls: toolCallsState });
-                                    break;
-                                }
-
-                                case 'tool_end': {
-                                    toolCallsState = toolCallsState.map(t =>
-                                        t.id === data.id
-                                            ? {
-                                                ...t,
-                                                status: (data.error ? 'error' : 'completed') as ToolStatus,
-                                                result: data.result,
-                                                endTime: new Date(),
-                                            }
-                                            : t
-                                    );
-                                    setActiveTools(toolCallsState);
-                                    updateMessage(assistantMessageId, { toolCalls: toolCallsState });
-                                    break;
-                                }
-
-                                case 'stream':
-                                    ensureAssistantMessage();
-                                    setIsThinking(false);
-                                    setIsStreaming(true);
-                                    currentContent += data.token;
-                                    updateMessage(assistantMessageId, { content: currentContent });
-                                    break;
-
-                                case 'message':
-                                    // Final complete message (fallback if stream didn't work)
-                                    if (!currentContent && data.content) {
-                                        ensureAssistantMessage();
-                                        currentContent = data.content;
-                                        updateMessage(assistantMessageId, { content: currentContent });
-                                    }
-                                    break;
-
-                                case 'complete':
-                                    setIsStreaming(false);
-                                    setActiveTools([]);
-                                    break;
-
-                                case 'error':
-                                    console.error('Stream error:', data.message);
-                                    setError(data.message);
-                                    updateMessage(assistantMessageId, {
-                                        content: currentContent || 'Sorry, I encountered an error.',
-                                    });
-                                    break;
-                            }
-                        } catch (e) {
-                            console.error('Error parsing SSE data:', e);
-                        }
+                    if (existingCallIndex >= 0) {
+                        // Update existing tool call
+                        toolCallsState[existingCallIndex] = toolCall;
+                    } else {
+                        // Add new tool call
+                        toolCallsState.push(toolCall);
                     }
+                    setActiveTools([...toolCallsState]); // Update active tools for UI
+                    updateMessage(assistantMessageId, { toolCalls: [...toolCallsState] });
+                },
+                onToolCallFinished: async (toolCall: ToolCall) => {
+                    // Update the specific tool call with its final status and result
+                    toolCallsState = toolCallsState.map(t =>
+                        t.id === toolCall.id
+                            ? { ...t, status: toolCall.status, result: toolCall.result, endTime: new Date() }
+                            : t
+                    );
+                    setActiveTools([...toolCallsState]);
+                    updateMessage(assistantMessageId, { toolCalls: [...toolCallsState] });
+                },
+                onComplete: () => {
+                    setIsStreaming(false);
+                    setActiveTools([]);
+                },
+                onError: (message: string) => {
+                    console.error('Stream error:', message);
+                    setError(message);
+                    updateMessage(assistantMessageId, {
+                        content: currentContent || 'Sorry, I encountered an error during streaming.',
+                    });
                 }
-            }
+            });
         } catch (err) {
             if (err instanceof Error && err.name === 'AbortError') {
                 // Request was aborted, don't show error

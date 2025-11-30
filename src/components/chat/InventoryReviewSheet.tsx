@@ -4,10 +4,13 @@ import { useState } from 'react';
 import { Drawer } from 'vaul';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus, Trash2, Save, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { api } from '@/db/supabase'; // Direct DB access for simplicity in MVP
 import { addInventoryTool } from '@/agent/tools/definitions'; // Re-use the add logic indirectly via API call mapping
 
-interface InventoryItemDraft {
+import { INGREDIENT_CATEGORIES } from '@/lib/constants';
+
+export interface InventoryItemDraft {
   name: string;
   quantity: number;
   unit: string;
@@ -21,10 +24,6 @@ interface InventoryReviewSheetProps {
   initialItems: InventoryItemDraft[];
   onSave: (items: InventoryItemDraft[]) => Promise<void>;
 }
-
-const CATEGORIES = [
-  "produce", "protein", "dairy", "pantry", "frozen", "beverage", "condiment", "grain", "spice", "unknown"
-];
 
 export function InventoryReviewSheet({ open, onOpenChange, initialItems, onSave }: InventoryReviewSheetProps) {
   const [items, setItems] = useState<InventoryItemDraft[]>(initialItems);
@@ -48,10 +47,11 @@ export function InventoryReviewSheet({ open, onOpenChange, initialItems, onSave 
     setIsSaving(true);
     try {
       await onSave(items);
+      toast.success(`Saved ${items.length} items to inventory`);
       onOpenChange(false);
     } catch (error) {
       console.error("Failed to save items:", error);
-      // TODO: Show error toast
+      toast.error("Failed to save items. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -112,34 +112,34 @@ export function InventoryReviewSheet({ open, onOpenChange, initialItems, onSave 
 
                       <div className="grid grid-cols-3 gap-3">
                         <div className="space-y-1">
-                           <label className="text-xs font-bold text-stone-400 uppercase tracking-wider">Qty</label>
-                           <input
-                             type="number"
-                             value={item.quantity}
-                             onChange={(e) => handleUpdateItem(index, 'quantity', parseFloat(e.target.value))}
-                             className="w-full bg-parchment/50 rounded-lg px-3 py-2 text-sm font-bold text-espresso border-transparent focus:border-terracotta focus:ring-0"
-                           />
+                          <label className="text-xs font-bold text-stone-400 uppercase tracking-wider">Qty</label>
+                          <input
+                            type="number"
+                            value={item.quantity}
+                            onChange={(e) => handleUpdateItem(index, 'quantity', parseFloat(e.target.value))}
+                            className="w-full bg-parchment/50 rounded-lg px-3 py-2 text-sm font-bold text-espresso border-transparent focus:border-terracotta focus:ring-0"
+                          />
                         </div>
                         <div className="space-y-1">
-                           <label className="text-xs font-bold text-stone-400 uppercase tracking-wider">Unit</label>
-                           <input
-                             type="text"
-                             value={item.unit}
-                             onChange={(e) => handleUpdateItem(index, 'unit', e.target.value)}
-                             className="w-full bg-parchment/50 rounded-lg px-3 py-2 text-sm font-bold text-espresso border-transparent focus:border-terracotta focus:ring-0"
-                           />
+                          <label className="text-xs font-bold text-stone-400 uppercase tracking-wider">Unit</label>
+                          <input
+                            type="text"
+                            value={item.unit}
+                            onChange={(e) => handleUpdateItem(index, 'unit', e.target.value)}
+                            className="w-full bg-parchment/50 rounded-lg px-3 py-2 text-sm font-bold text-espresso border-transparent focus:border-terracotta focus:ring-0"
+                          />
                         </div>
                         <div className="space-y-1">
-                           <label className="text-xs font-bold text-stone-400 uppercase tracking-wider">Category</label>
-                           <select
-                             value={item.category}
-                             onChange={(e) => handleUpdateItem(index, 'category', e.target.value)}
-                             className="w-full bg-parchment/50 rounded-lg px-3 py-2 text-sm font-bold text-espresso border-transparent focus:border-terracotta focus:ring-0 appearance-none"
-                           >
-                             {CATEGORIES.map(cat => (
-                               <option key={cat} value={cat}>{cat}</option>
-                             ))}
-                           </select>
+                          <label className="text-xs font-bold text-stone-400 uppercase tracking-wider">Category</label>
+                          <select
+                            value={item.category}
+                            onChange={(e) => handleUpdateItem(index, 'category', e.target.value)}
+                            className="w-full bg-parchment/50 rounded-lg px-3 py-2 text-sm font-bold text-espresso border-transparent focus:border-terracotta focus:ring-0 appearance-none"
+                          >
+                            {INGREDIENT_CATEGORIES.map(cat => (
+                              <option key={cat} value={cat}>{cat}</option>
+                            ))}
+                          </select>
                         </div>
                       </div>
                     </motion.div>

@@ -20,14 +20,14 @@ interface CategoryTabsProps {
 }
 
 const CATEGORY_CONFIG: Record<IngredientCategory | 'all', { label: string; icon: typeof LayoutGrid; color: string }> = {
-    all: { label: 'All', icon: LayoutGrid, color: 'bg-espresso' },
+    all: { label: 'All', icon: LayoutGrid, color: 'bg-text-primary' },
     produce: { label: 'Produce', icon: Apple, color: 'bg-sage' },
     protein: { label: 'Protein', icon: Beef, color: 'bg-cayenne' },
-    dairy: { label: 'Dairy', icon: Milk, color: 'bg-cream' },
+    dairy: { label: 'Dairy', icon: Milk, color: 'bg-sky-200' },
     pantry: { label: 'Pantry', icon: Package, color: 'bg-marigold' },
     frozen: { label: 'Frozen', icon: Snowflake, color: 'bg-sky-400' },
-    beverage: { label: 'Drinks', icon: Coffee, color: 'bg-mocha' },
-    unknown: { label: 'Other', icon: Package, color: 'bg-warm-gray' },
+    beverage: { label: 'Drinks', icon: Coffee, color: 'bg-terracotta' },
+    unknown: { label: 'Other', icon: Package, color: 'bg-text-tertiary' },
 };
 
 const DEFAULT_CATEGORIES: IngredientCategory[] = [
@@ -53,7 +53,7 @@ export function CategoryTabs({ categories = DEFAULT_CATEGORIES, activeCategory, 
                             "focus:outline-none focus-visible:ring-2 focus-visible:ring-terracotta/50",
                             isActive
                                 ? "text-white shadow-md"
-                                : "bg-warm-white text-latte border border-clay/15 hover:bg-parchment hover:text-espresso"
+                                : "bg-bg-secondary text-text-secondary border border-border-subtle hover:bg-bg-tertiary hover:text-text-primary"
                         )}
                         whileTap={{ scale: 0.97 }}
                     >
@@ -61,7 +61,7 @@ export function CategoryTabs({ categories = DEFAULT_CATEGORIES, activeCategory, 
                         {isActive && (
                             <motion.div
                                 layoutId="categoryPill"
-                                className="absolute inset-0 bg-espresso rounded-full"
+                                className="absolute inset-0 bg-text-primary rounded-full"
                                 initial={false}
                                 transition={{
                                     type: "spring",
@@ -73,8 +73,8 @@ export function CategoryTabs({ categories = DEFAULT_CATEGORIES, activeCategory, 
 
                         <Icon className={cn(
                             "relative w-4 h-4 transition-colors",
-                            isActive ? "text-white" : "text-warm-gray"
-                        )} />
+                            isActive ? "text-white" : "text-text-tertiary"
+                        )} strokeWidth={1.5} />
                         <span className="relative">{config.label}</span>
                     </motion.button>
                 );
