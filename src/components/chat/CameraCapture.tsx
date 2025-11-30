@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, X, RotateCcw, Check, SwitchCamera, Zap } from 'lucide-react';
+import { Camera, X, RotateCcw, Check, SwitchCamera } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface CameraCaptureProps {
@@ -21,6 +22,12 @@ export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps
     const [isLoading, setIsLoading] = useState(true);
     const [isSupported, setIsSupported] = useState(true);
     const [flash, setFlash] = useState(false);
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+        return () => setMounted(false);
+    }, []);
 
     // Check if camera API is supported
     useEffect(() => {
@@ -178,15 +185,15 @@ export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps
         }
     }, [capturedImage, onCapture, handleClose]);
 
-    if (!isOpen) return null;
+    if (!mounted || !isOpen) return null;
 
-    return (
+    return createPortal(
         <AnimatePresence>
             <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="modal-fullscreen z-50 bg-black flex flex-col"
+                className="fixed inset-0 h-[100dvh] bg-black z-[100] flex flex-col"
             >
                 {/* Flash Animation */}
                 <AnimatePresence>
@@ -196,13 +203,13 @@ export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps
                             animate={{ opacity: 0 }}
                             exit={{ opacity: 0 }}
                             transition={{ duration: 0.15 }}
-                            className="absolute inset-0 bg-white z-[60] pointer-events-none"
+                            className="absolute inset-0 bg-white z-[110] pointer-events-none"
                         />
                     )}
                 </AnimatePresence>
 
                 {/* Header */}
-                <div className="flex items-center justify-between p-4 pt-safe-top z-10 relative">
+                <div className="flex items-center justify-between p-4 pt-safe-top z-[101] relative">
                     <button
                         onClick={handleClose}
                         className="p-2 rounded-full bg-black/20 text-white backdrop-blur-md border border-white/10 hover:bg-black/40 transition-colors"
@@ -295,7 +302,7 @@ export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps
                 </div>
 
                 {/* Bottom Controls */}
-                <div className="p-8 pb-safe-bottom bg-black z-10">
+                <div className="p-8 pb-safe-bottom bg-black z-[101]">
                     {capturedImage ? (
                         <div className="flex items-center justify-between max-w-xs mx-auto">
                             <motion.button
@@ -343,6 +350,7 @@ export function CameraCapture({ isOpen, onClose, onCapture }: CameraCaptureProps
                     )}
                 </div>
             </motion.div>
-        </AnimatePresence>
+        </AnimatePresence>,
+        document.body
     );
 }
