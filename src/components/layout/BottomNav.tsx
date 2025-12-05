@@ -1,17 +1,22 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { MessageCircle, Refrigerator } from 'lucide-react';
+import { MessageCircle, Refrigerator, Calendar, BookOpen, ShoppingCart } from 'lucide-react';
 import { motion } from 'framer-motion';
 
+export type TabId = 'kitchen' | 'plan' | 'recipes' | 'shop' | 'assistant';
+
 interface BottomNavProps {
-    activeTab: 'kitchen' | 'assistant';
-    onTabChange: (tab: 'kitchen' | 'assistant') => void;
+    activeTab: TabId;
+    onTabChange: (tab: TabId) => void;
 }
 
 const tabs = [
     { id: 'kitchen' as const, label: 'Kitchen', icon: Refrigerator },
-    { id: 'assistant' as const, label: 'Assistant', icon: MessageCircle },
+    { id: 'plan' as const, label: 'Plan', icon: Calendar },
+    { id: 'recipes' as const, label: 'Recipes', icon: BookOpen },
+    { id: 'shop' as const, label: 'Shop', icon: ShoppingCart },
+    { id: 'assistant' as const, label: 'Chat', icon: MessageCircle },
 ];
 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
@@ -19,7 +24,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
         <div className="relative z-0">
             {/* Frosted glass navigation */}
             <nav className="glass border-t border-clay/10 pb-safe-bottom">
-                <div className="flex justify-around items-center h-16 px-4">
+                <div className="flex justify-around items-center h-16 px-2">
                     {tabs.map((tab) => {
                         const isActive = activeTab === tab.id;
                         const Icon = tab.icon;
@@ -29,7 +34,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
                                 key={tab.id}
                                 onClick={() => onTabChange(tab.id)}
                                 className={cn(
-                                    "relative flex flex-col items-center justify-center w-full h-full space-y-1 transition-all duration-200",
+                                    "relative flex flex-col items-center justify-center w-full h-full space-y-0.5 transition-all duration-200",
                                     "focus:outline-none focus-visible:ring-2 focus-visible:ring-terracotta/50 focus-visible:ring-offset-2 rounded-lg"
                                 )}
                             >
@@ -49,7 +54,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
                                     )}
                                     <Icon
                                         className={cn(
-                                            "relative w-6 h-6 transition-colors duration-200",
+                                            "relative w-5 h-5 transition-colors duration-200",
                                             isActive ? "text-terracotta" : "text-warm-gray"
                                         )}
                                         strokeWidth={isActive ? 2 : 1.5}
@@ -59,7 +64,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
                                 {/* Label */}
                                 <span
                                     className={cn(
-                                        "text-xs font-medium transition-colors duration-200",
+                                        "text-[10px] font-medium transition-colors duration-200",
                                         isActive ? "text-terracotta" : "text-warm-gray"
                                     )}
                                 >

@@ -59,5 +59,7 @@ supabase/.temp
 # Playwright MCP cache
 .playwright-mcp/
 
-# Beads local state
-.beads/
+# Beads - ignore local DB cache, but commit JSONL for git sync
+.beads/*.db
+.beads/*.db-shm
+.beads/*.db-wal

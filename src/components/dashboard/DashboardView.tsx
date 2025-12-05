@@ -11,10 +11,11 @@ import { ScanLine, Sparkles, ChefHat } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useChat } from '@/hooks/useChat';
 import { DashboardSkeleton } from '@/components/skeletons/DashboardSkeleton';
+import type { TabId } from '@/components/layout/BottomNav';
 
 interface DashboardViewProps {
     onScan: () => void;
-    onTabChange: (tab: 'kitchen' | 'assistant') => void;
+    onTabChange: (tab: TabId) => void;
 }
 
 export function DashboardView({ onScan, onTabChange }: DashboardViewProps) {

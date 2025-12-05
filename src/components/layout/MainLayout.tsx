@@ -1,14 +1,15 @@
 'use client';
 
 import { ReactNode } from 'react';
-import { BottomNav } from './BottomNav';
+import { BottomNav, type TabId } from './BottomNav';
 import Header from './Header';
 
 interface MainLayoutProps {
     children: ReactNode;
-    activeTab: 'kitchen' | 'assistant';
-    onTabChange: (tab: 'kitchen' | 'assistant') => void;
+    activeTab: TabId;
+    onTabChange: (tab: TabId) => void;
 }
+
 
 export function MainLayout({ children, activeTab, onTabChange }: MainLayoutProps) {
     return (
